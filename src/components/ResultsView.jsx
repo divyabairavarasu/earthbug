@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { askFollowUp } from '../utils/gemini';
 
 const SHARE_TOAST_TIMEOUT_MS = 2000;
 
@@ -10,9 +11,13 @@ function buildClipboardShareText(result) {
   return `${buildShareText(result)}\n${window.location.href}`;
 }
 
-export default function ResultsView({ result, imageUrl, onScanAnother }) {
+export default function ResultsView({ result, imageUrl, onScanAnother, chatSession }) {
   const headingRef = useRef(null);
   const [shareToast, setShareToast] = useState(null);
+  const [followUpQuestion, setFollowUpQuestion] = useState('');
+  const [followUpAnswer, setFollowUpAnswer] = useState(null);
+  const [isAskingFollowUp, setIsAskingFollowUp] = useState(false);
+  const [followUpError, setFollowUpError] = useState(null);
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -45,17 +50,29 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
   }
 
   const verdictConfig = {
+    'Mostly Helpful': { emoji: '🌱', color: 'bg-leaf-100 text-leaf-800 border-leaf-200', accent: 'text-leaf-700' },
+    'Mostly Harmful': { emoji: '⚠️', color: 'bg-red-50 text-red-800 border-red-200', accent: 'text-red-700' },
+    'Context-Dependent': { emoji: '🤷', color: 'bg-amber-50 text-amber-800 border-amber-200', accent: 'text-amber-700' },
+    'Neutral Visitor': { emoji: '🔵', color: 'bg-blue-50 text-blue-800 border-blue-200', accent: 'text-blue-700' },
+    // backward compat
     'Garden Buddy': { emoji: '🌱', color: 'bg-leaf-100 text-leaf-800 border-leaf-200', accent: 'text-leaf-700' },
     'Garden Bully': { emoji: '⚠️', color: 'bg-red-50 text-red-800 border-red-200', accent: 'text-red-700' },
     "It's Complicated": { emoji: '🤷', color: 'bg-amber-50 text-amber-800 border-amber-200', accent: 'text-amber-700' },
   };
 
-  const verdict = verdictConfig[result.verdict] || verdictConfig["It's Complicated"];
+  const verdict = verdictConfig[result.verdict] || verdictConfig['Context-Dependent'];
   const shareData = useMemo(() => ({
     title: `EarthBug: ${result.name}`,
     text: buildShareText(result),
     url: window.location.href,
   }), [result]);
+
+  const SUGGESTED_QUESTIONS = [
+    `How do I attract more ${result.name}s?`,
+    'What eats this bug?',
+    'Is this bug affected by climate change?',
+    'How can I protect this bug in my garden?',
+  ];
 
   const impactIcon = (impact) => {
     if (impact === 'positive') return '✅';
@@ -89,6 +106,21 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
     }
   }, [result, shareData]);
 
+  const handleAskFollowUp = useCallback(async (question) => {
+    if (!chatSession || !question.trim()) return;
+    setIsAskingFollowUp(true);
+    setFollowUpError(null);
+    setFollowUpAnswer(null);
+    try {
+      const answer = await askFollowUp(chatSession, question.trim());
+      setFollowUpAnswer(answer);
+    } catch (err) {
+      setFollowUpError(err.message || 'Could not get an answer. Please try again.');
+    } finally {
+      setIsAskingFollowUp(false);
+    }
+  }, [chatSession]);
+
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       {/* Hero card with image and verdict */}
@@ -96,7 +128,7 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
         <div className="relative">
           <img
             src={imageUrl}
-            alt={result.name ?? 'Identified bug'}
+            alt={result.name ? `Photo of ${result.name}` : 'Identified insect'}
             className="w-full aspect-[16/9] object-cover"
           />
           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-6 pt-16">
@@ -131,6 +163,13 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
               Share Find 🔗
             </button>
           </div>
+
+          {result.nuance && (
+            <p className="text-sm text-earth-500 italic flex items-start gap-1.5 mb-3">
+              <span>⚖️</span>
+              <span>{result.nuance}</span>
+            </p>
+          )}
 
           <p className="text-earth-600 leading-relaxed">{result.summary}</p>
 
@@ -211,6 +250,113 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
             <span>💡</span> Did You Know?
           </h3>
           <p className="text-earth-600 leading-relaxed">{result.didYouKnow}</p>
+        </div>
+      )}
+
+      {/* Eco-Actions */}
+      {result.ecoActions && result.ecoActions.length > 0 && (
+        <div className="card bg-leaf-50 border-leaf-200">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold text-leaf-700 mb-3">
+            <span>🌍</span> What You Can Do
+          </h3>
+          <ul className="space-y-2">
+            {result.ecoActions.map((action, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-earth-700">
+                <span className="text-leaf-500 font-bold mt-0.5">→</span>
+                <span>{action}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* iNaturalist */}
+      {result.scientificName && (
+        <div className="card bg-earth-50 border-earth-200">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold text-soil-700 mb-2">
+            <span>🔭</span> Contribute to Science
+          </h3>
+          <p className="text-earth-500 text-sm mb-3">
+            Help scientists track biodiversity by reporting your sighting to iNaturalist.
+          </p>
+          <a
+            href={`https://www.inaturalist.org/observations/new?taxon_name=${encodeURIComponent(result.scientificName)}&description=Identified+via+EarthBug+%F0%9F%90%9B`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 btn-secondary text-sm py-2 px-4"
+          >
+            <span>🌿</span>
+            Report on iNaturalist →
+          </a>
+        </div>
+      )}
+
+      {/* Follow-up questions */}
+      {chatSession && (
+        <div className="card">
+          <h3 className="flex items-center gap-2 font-display text-lg font-semibold text-earth-800 mb-3">
+            <span>💬</span> Ask About This Bug
+          </h3>
+
+          {/* Suggested questions */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {SUGGESTED_QUESTIONS.map((q) => (
+              <button
+                key={q}
+                onClick={() => {
+                  setFollowUpQuestion(q);
+                  handleAskFollowUp(q);
+                }}
+                disabled={isAskingFollowUp}
+                className="text-xs px-3 py-1.5 rounded-full bg-earth-100 hover:bg-earth-200 text-earth-700 transition-colors disabled:opacity-50"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom question input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={followUpQuestion}
+              onChange={(e) => setFollowUpQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && followUpQuestion.trim() && !isAskingFollowUp) {
+                  handleAskFollowUp(followUpQuestion);
+                }
+              }}
+              placeholder="Ask anything about this bug..."
+              className="flex-1 px-4 py-2 rounded-xl border border-earth-200 bg-earth-50 text-earth-800 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-400 focus:border-transparent"
+              disabled={isAskingFollowUp}
+            />
+            <button
+              onClick={() => handleAskFollowUp(followUpQuestion)}
+              disabled={!followUpQuestion.trim() || isAskingFollowUp}
+              className="btn-primary py-2 px-4 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isAskingFollowUp ? '...' : 'Ask'}
+            </button>
+          </div>
+
+          {isAskingFollowUp && (
+            <div className="mt-4 flex items-center gap-2 text-earth-400 text-sm">
+              <div className="w-4 h-4 rounded-full border-2 border-leaf-400 border-t-transparent animate-spin" />
+              Consulting the entomologist...
+            </div>
+          )}
+
+          {followUpAnswer && (
+            <div className="mt-4 p-4 bg-leaf-50 rounded-xl border border-leaf-200">
+              <p className="text-earth-700 text-sm leading-relaxed whitespace-pre-wrap">{followUpAnswer}</p>
+            </div>
+          )}
+
+          {followUpError && (
+            <div className="mt-4 p-3 bg-red-50 rounded-xl text-red-700 text-sm">
+              {followUpError}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,34 +1,58 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Header from './components/Header';
-import ApiKeyInput from './components/ApiKeyInput';
 import CameraView from './components/CameraView';
 import AnalyzingView from './components/AnalyzingView';
 import ResultsView from './components/ResultsView';
 import Footer from './components/Footer';
 import { useCamera } from './hooks/useCamera';
-import { initGemini, identifyBug } from './utils/gemini';
+import { initGemini, identifyBug, createBugChat } from './utils/gemini';
 
 const VIEWS = {
-  API_KEY: 'api_key',
   CAMERA: 'camera',
   ANALYZING: 'analyzing',
   RESULTS: 'results',
 };
 
-const API_KEY_STORAGE_KEY = 'earthbug_api_key';
 const SCAN_HISTORY_STORAGE_KEY = 'earthbug_scan_history';
 
-function readStoredApiKey() {
-  return window.localStorage.getItem(API_KEY_STORAGE_KEY)?.trim() ?? '';
-}
+// Demo result — shown when ?demo=true is in the URL, no API key needed
+const DEMO_RESULT = {
+  name: 'Seven-Spot Ladybug',
+  scientificName: 'Coccinella septempunctata',
+  verdict: 'Mostly Helpful',
+  confidence: 'high',
+  summary: 'A beloved garden guardian that feasts on aphids and shields your plants from infestations.',
+  benefits: [
+    {
+      title: 'Natural Pest Control',
+      description:
+        'A single ladybug can consume up to 5,000 aphids in its lifetime. This dramatically reduces the need for chemical pesticides, protecting your soil microbiome and local waterways.',
+    },
+    {
+      title: 'Pollination Assistance',
+      description:
+        'While feeding on pollen as larvae, ladybugs inadvertently transfer pollen between flowers, contributing to plant reproduction across your garden.',
+    },
+  ],
+  harms: [],
+  ecosystemRole:
+    'Ladybugs sit at a critical junction in the garden food web — voracious predators of soft-bodied insects like aphids and scale insects, while themselves serving as prey for birds and spiders. Their bright warning coloration (aposematism) deters most would-be predators.',
+  didYouKnow:
+    "The spots on a ladybug don't indicate its age — they're there to warn predators that it tastes awful! When threatened, ladybugs can secrete a foul-smelling fluid from their leg joints.",
+  soilImpact: 'positive',
+  plantImpact: 'positive',
+  nuance:
+    'Non-native ladybug species can outcompete native populations for food, so encouraging your local native species is best.',
+  ecoActions: [
+    "Don't spray pesticides — this ladybug naturally controls aphids without chemical runoff",
+    'Plant native flowers like marigolds and fennel to attract and feed ladybug populations',
+    'Report your sighting to iNaturalist to help scientists track biodiversity changes',
+    'Avoid removing leaf litter where ladybugs overwinter in your garden',
+  ],
+};
 
-function storeApiKey(apiKey) {
-  window.localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
-}
-
-function clearStoredApiKey() {
-  window.localStorage.removeItem(API_KEY_STORAGE_KEY);
-}
+const DEMO_IMAGE_URL =
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Coccinella_septempunctata_closeup.jpg/640px-Coccinella_septempunctata_closeup.jpg';
 
 function readStoredScanHistory() {
   try {
@@ -50,75 +74,44 @@ function storeScanHistory(history) {
   }
 }
 
+function getVerdictEmoji(verdict) {
+  if (verdict === 'Mostly Helpful' || verdict === 'Garden Buddy') return '🌱';
+  if (verdict === 'Mostly Harmful' || verdict === 'Garden Bully') return '⚠️';
+  return '🤷';
+}
+
 export default function App() {
-  const [view, setView] = useState(VIEWS.API_KEY);
-  const [apiKey, setApiKey] = useState('');
+  const [view, setView] = useState(VIEWS.CAMERA);
   const [capturedImage, setCapturedImage] = useState(null);
   const [result, setResult] = useState(null);
+  const [chatSession, setChatSession] = useState(null);
   const [error, setError] = useState(null);
   const [scanHistory, setScanHistory] = useState(() => readStoredScanHistory());
   const analysisCancelledRef = useRef(false);
   const isAnalyzingRef = useRef(false);
   const cameraHook = useCamera();
 
+  // Auto-initialize Gemini from the embedded env key — no user input needed
+  useEffect(() => {
+    const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (envKey) {
+      initGemini(envKey);
+    }
+  }, []);
+
+  // Demo mode: ?demo=true loads a pre-seeded result without any API call
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('demo') === 'true') {
+      setCapturedImage(DEMO_IMAGE_URL);
+      setResult(DEMO_RESULT);
+      setView(VIEWS.RESULTS);
+    }
+  }, []);
+
   useEffect(() => {
     storeScanHistory(scanHistory);
   }, [scanHistory]);
-
-  useEffect(() => {
-    try {
-      const storedApiKey = readStoredApiKey();
-
-      if (!storedApiKey) {
-        return;
-      }
-
-      initGemini(storedApiKey);
-      setApiKey(storedApiKey);
-      setView(VIEWS.CAMERA);
-    } catch (storageError) {
-      console.error('Could not read saved Gemini API key:', storageError);
-      setError('Could not access saved API key storage in this browser.');
-    }
-  }, []);
-
-  const handleApiKey = useCallback((key) => {
-    const trimmedKey = key.trim();
-
-    if (!trimmedKey) {
-      return;
-    }
-
-    try {
-      storeApiKey(trimmedKey);
-    } catch (storageError) {
-      console.error('Could not save Gemini API key:', storageError);
-      setError('Could not save your API key in this browser.');
-      return;
-    }
-
-    setApiKey(trimmedKey);
-    setView(VIEWS.CAMERA);
-    setError(null);
-    initGemini(trimmedKey);
-  }, []);
-
-  const handleChangeApiKey = useCallback(() => {
-    try {
-      clearStoredApiKey();
-    } catch (storageError) {
-      console.error('Could not clear saved Gemini API key:', storageError);
-      setError('Could not clear your saved API key in this browser.');
-      return;
-    }
-
-    cameraHook.stopCamera();
-    setApiKey('');
-    setCapturedImage(null);
-    setResult(null);
-    setError(null);
-    setView(VIEWS.API_KEY);
-  }, [cameraHook]);
 
   const cancelAnalysis = useCallback(() => {
     analysisCancelledRef.current = true;
@@ -133,6 +126,7 @@ export default function App() {
     isAnalyzingRef.current = true;
     analysisCancelledRef.current = false;
     setCapturedImage(photo.dataUrl);
+    setChatSession(null);
     setView(VIEWS.ANALYZING);
     setError(null);
 
@@ -143,6 +137,7 @@ export default function App() {
 
       setResult(analysis);
 
+      // Spin up a multi-turn chat session so the user can ask follow-up questions
       if (!analysis.error) {
         setScanHistory(prev => {
           const deduped = prev.filter(item => item.name !== analysis.name);
@@ -151,6 +146,13 @@ export default function App() {
             ...deduped,
           ].slice(0, 10);
         });
+
+        try {
+          const chat = createBugChat(analysis, photo.base64, photo.mimeType);
+          setChatSession(chat);
+        } catch {
+          // Follow-up chat is a bonus feature — don't fail the whole flow
+        }
       }
 
       setView(VIEWS.RESULTS);
@@ -167,6 +169,7 @@ export default function App() {
   const handleScanAnother = useCallback(() => {
     setCapturedImage(null);
     setResult(null);
+    setChatSession(null);
     setView(VIEWS.CAMERA);
   }, []);
 
@@ -188,19 +191,11 @@ export default function App() {
           </div>
         )}
 
-        {view === VIEWS.API_KEY && (
-          <ApiKeyInput
-            initialKey={apiKey}
-            onSubmit={handleApiKey}
-          />
-        )}
-
         {view === VIEWS.CAMERA && (
           <CameraView
             cameraHook={cameraHook}
             onCapture={analyzeImage}
             onFileUpload={analyzeImage}
-            onChangeApiKey={handleChangeApiKey}
           />
         )}
 
@@ -213,6 +208,7 @@ export default function App() {
             result={result}
             imageUrl={capturedImage}
             onScanAnother={handleScanAnother}
+            chatSession={chatSession}
           />
         )}
 
@@ -223,12 +219,13 @@ export default function App() {
               Recent Scans
             </h3>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {scanHistory.map((scan, i) => (
+              {scanHistory.map((scan) => (
                 <button
                   key={scan.timestamp}
                   onClick={() => {
                     setCapturedImage(scan.imageUrl);
                     setResult(scan);
+                    setChatSession(null);
                     setView(VIEWS.RESULTS);
                   }}
                   className="group relative aspect-square rounded-xl overflow-hidden border-2 border-earth-100
@@ -242,14 +239,14 @@ export default function App() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-earth-100 text-2xl">
-                      {scan.verdict === 'Garden Buddy' ? '🌱' : scan.verdict === 'Garden Bully' ? '⚠️' : '🤷'}
+                      {getVerdictEmoji(scan.verdict)}
                     </div>
                   )}
                   <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                     <p className="text-white text-xs font-medium truncate">{scan.name}</p>
                   </div>
                   <div className="absolute top-1.5 right-1.5 text-sm">
-                    {scan.verdict === 'Garden Buddy' ? '🌱' : scan.verdict === 'Garden Bully' ? '⚠️' : '🤷'}
+                    {getVerdictEmoji(scan.verdict)}
                   </div>
                 </button>
               ))}

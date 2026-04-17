@@ -8,11 +8,14 @@ export default function Header() {
         </h1>
       </div>
       <p className="text-earth-500 text-lg font-light italic">
-        helps build the soil
+        protect your local ecosystem
       </p>
       <p className="text-earth-400 text-sm mt-3 max-w-md mx-auto">
-        Snap a bug. Discover its secret life in your garden's ecosystem.
+        Snap a bug. Protect your local ecosystem.
       </p>
+      <span className="inline-flex items-center gap-1 mt-3 px-3 py-1 rounded-full text-xs font-medium bg-leaf-100 text-leaf-700 border border-leaf-200">
+        🌍 Earth Day · Citizen Science
+      </span>
     </header>
   );
 }

@@ -13,7 +13,10 @@ export default function Footer() {
         </a>
       </p>
       <p className="text-earth-300 text-xs mt-2">
-        Powered by Google Gemini · Every bug matters
+        Powered by Google Gemini · Every bug matters · 🐛 EarthBug
+      </p>
+      <p className="text-earth-300 text-xs mt-1">
+        Helping gardeners protect pollinators, one scan at a time
       </p>
     </footer>
   );
