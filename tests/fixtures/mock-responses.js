@@ -80,3 +80,21 @@ export const MALFORMED_JSON_HTTP_BODY = buildGeminiHttpResponse(
 );
 
 export const EMPTY_TEXT_HTTP_BODY = buildGeminiHttpResponse('');
+
+// Response simulating Gemini safety filters blocking the content
+export const SAFETY_BLOCKED_HTTP_BODY = {
+  candidates: [
+    {
+      finishReason: 'SAFETY',
+      content: {},
+      safetyRatings: [
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'HIGH' },
+      ],
+      index: 0,
+    },
+  ],
+  promptFeedback: {
+    blockReason: 'SAFETY',
+    safetyRatings: [],
+  },
+};

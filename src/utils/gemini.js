@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
 const SYSTEM_PROMPT = `You are EarthBug, an expert entomologist and soil ecologist.
 A user will show you a photo of a bug/insect they found. Your job is to:
@@ -48,6 +48,7 @@ const HTTP_STATUS_FORBIDDEN = 403;
 const QUOTA_EXCEEDED_PATTERN = /\b429\b/;
 const AUTH_FAILED_PATTERN = /\b401\b|\b403\b/;
 const MODEL_NOT_FOUND_PATTERN = /\b404\b|NOT_FOUND/i;
+const CONTENT_BLOCKED_PATTERN = /CONTENT_BLOCKED/;
 const QUOTA_KEYWORD_PATTERN = /quota exceeded/i;
 const API_KEY_KEYWORD_PATTERN = /api key/i;
 const NETWORK_FAILURE_PATTERN = /network|fetch failed|failed to fetch/i;
@@ -63,6 +64,15 @@ const NETWORK_ERROR =
   'EarthBug could not reach Gemini. Please check your connection and try again.';
 const MODEL_NOT_FOUND_ERROR =
   'The AI model is unavailable or misconfigured. Please contact support.';
+const CONTENT_BLOCKED_ERROR =
+  "That image couldn't be processed — it may contain content that violates our safety guidelines. Please try a different photo of a garden bug.";
+
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT,        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,       threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+];
 
 function parseRetryDelaySeconds(errorMessage) {
   const retryMatch = errorMessage.match(RETRY_DELAY_PATTERN);
@@ -78,6 +88,10 @@ function parseRetryDelaySeconds(errorMessage) {
 
 function formatGeminiError(error) {
   const errorMessage = error instanceof Error ? error.message : String(error);
+
+  if (CONTENT_BLOCKED_PATTERN.test(errorMessage)) {
+    return CONTENT_BLOCKED_ERROR;
+  }
 
   if (QUOTA_EXCEEDED_PATTERN.test(errorMessage) || QUOTA_KEYWORD_PATTERN.test(errorMessage)) {
     const retrySeconds = parseRetryDelaySeconds(errorMessage);
@@ -106,7 +120,7 @@ function formatGeminiError(error) {
 
 export function initGemini(apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
-  model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  model = genAI.getGenerativeModel({ model: GEMINI_MODEL, safetySettings: SAFETY_SETTINGS });
 }
 
 export function isInitialized() {
@@ -141,6 +155,14 @@ export async function identifyBug(imageBase64, mimeType = 'image/jpeg') {
       timeoutPromise,
     ]);
     const response = await result.response;
+
+    // Check if the response was blocked by safety filters
+    const blockReason = response.promptFeedback?.blockReason;
+    const finishReason = response.candidates?.[0]?.finishReason;
+    if (blockReason === 'SAFETY' || finishReason === 'SAFETY') {
+      throw new Error('CONTENT_BLOCKED');
+    }
+
     text = response.text();
   } catch (error) {
     console.error('Gemini request failed:', error);
