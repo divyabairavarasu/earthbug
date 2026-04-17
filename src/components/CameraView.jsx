@@ -1,0 +1,139 @@
+import { useEffect, useRef, useState } from 'react';
+
+export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
+  const { videoRef, isActive, error, startCamera, stopCamera, capturePhoto, flipCamera } = cameraHook;
+  const fileInputRef = useRef(null);
+  const [countdown, setCountdown] = useState(null);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  const handleCapture = () => {
+    const photo = capturePhoto();
+    if (photo) {
+      stopCamera();
+      onCapture(photo);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+      onFileUpload({ dataUrl, base64, mimeType });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="card max-w-lg mx-auto">
+      {!isActive ? (
+        <div className="text-center space-y-4">
+          <div className="bg-earth-100 rounded-2xl p-12 flex flex-col items-center gap-4">
+            <div className="text-6xl">📸</div>
+            <p className="text-earth-600 font-medium">
+              Found a bug? Let's identify it!
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={() => startCamera()} className="btn-primary flex-1 flex items-center justify-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Open Camera
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="btn-secondary flex-1 flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Upload Photo
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Viewfinder */}
+          <div className="relative rounded-2xl overflow-hidden bg-black aspect-[4/3]">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            {/* Scan line overlay */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="scan-line absolute left-4 right-4 h-0.5 bg-leaf-400 opacity-50 rounded-full" />
+            </div>
+            {/* Corner brackets */}
+            <div className="absolute inset-0 pointer-events-none p-6">
+              <div className="w-full h-full border-2 border-white/20 rounded-lg" />
+            </div>
+            {/* Countdown overlay */}
+            {countdown && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <span className="text-white text-7xl font-bold">{countdown}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={stopCamera}
+              className="p-3 rounded-full bg-earth-200 hover:bg-earth-300 transition-colors"
+              title="Cancel"
+            >
+              <svg className="w-6 h-6 text-earth-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <button
+              onClick={handleCapture}
+              className="w-16 h-16 rounded-full bg-leaf-600 hover:bg-leaf-700 transition-all
+                         shadow-lg hover:shadow-xl active:scale-90 flex items-center justify-center
+                         ring-4 ring-leaf-200"
+              title="Take photo"
+            >
+              <div className="w-12 h-12 rounded-full bg-white/90" />
+            </button>
+
+            <button
+              onClick={flipCamera}
+              className="p-3 rounded-full bg-earth-200 hover:bg-earth-300 transition-colors"
+              title="Flip camera"
+            >
+              <svg className="w-6 h-6 text-earth-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm text-center">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
