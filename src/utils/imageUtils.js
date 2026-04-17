@@ -1,7 +1,7 @@
 const JPEG_MIME_TYPE = 'image/jpeg';
 const IMAGE_MAX_DIMENSION = 1024;
 const IMAGE_COMPRESSION_QUALITY = 0.85;
-const BYPASS_COMPRESSION_MIME_TYPES = new Set(['image/gif', 'image/svg+xml']);
+const BYPASS_COMPRESSION_MIME_TYPES = new Set(['image/svg+xml']);
 
 export function getBase64FromDataUrl(dataUrl) {
   return dataUrl.split(',')[1] ?? '';

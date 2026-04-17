@@ -1,4 +1,4 @@
-export default function AnalyzingView({ imageUrl }) {
+export default function AnalyzingView({ imageUrl, onCancel }) {
   return (
     <div className="card max-w-lg mx-auto text-center">
       <div className="mb-6">
@@ -27,6 +27,15 @@ export default function AnalyzingView({ imageUrl }) {
           />
         ))}
       </div>
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="mt-6 btn-secondary"
+          aria-label="Cancel analysis"
+        >
+          Cancel
+        </button>
+      )}
     </div>
   );
 }

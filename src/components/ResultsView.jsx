@@ -96,7 +96,7 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
         <div className="relative">
           <img
             src={imageUrl}
-            alt={result.name}
+            alt={result.name ?? 'Identified bug'}
             className="w-full aspect-[16/9] object-cover"
           />
           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-6 pt-16">
@@ -111,7 +111,8 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
           </div>
           {result.confidence && (
             <div
-              role="status"
+              role="img"
+              aria-label={`${result.confidence} confidence`}
               className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full"
             >
               {result.confidence} confidence

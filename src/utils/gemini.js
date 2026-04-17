@@ -36,7 +36,7 @@ If the image does not contain a recognizable bug or insect, respond with:
 
 Keep language accessible and friendly — imagine explaining to a curious gardener.`;
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-3-flash-preview';
 
 let genAI = null;
 let model = null;
@@ -45,10 +45,9 @@ const HTTP_STATUS_QUOTA_EXCEEDED = 429;
 const HTTP_STATUS_UNAUTHORIZED = 401;
 const HTTP_STATUS_FORBIDDEN = 403;
 
-const QUOTA_EXCEEDED_PATTERN = new RegExp(String(HTTP_STATUS_QUOTA_EXCEEDED));
-const AUTH_FAILED_PATTERN = new RegExp(
-  `${HTTP_STATUS_UNAUTHORIZED}|${HTTP_STATUS_FORBIDDEN}`,
-);
+const QUOTA_EXCEEDED_PATTERN = /\b429\b/;
+const AUTH_FAILED_PATTERN = /\b401\b|\b403\b/;
+const MODEL_NOT_FOUND_PATTERN = /\b404\b|NOT_FOUND/i;
 const QUOTA_KEYWORD_PATTERN = /quota exceeded/i;
 const API_KEY_KEYWORD_PATTERN = /api key/i;
 const NETWORK_FAILURE_PATTERN = /network|fetch failed|failed to fetch/i;
@@ -62,6 +61,8 @@ const INVALID_API_KEY_ERROR =
   'That Gemini API key was rejected. Please check the key and try again.';
 const NETWORK_ERROR =
   'EarthBug could not reach Gemini. Please check your connection and try again.';
+const MODEL_NOT_FOUND_ERROR =
+  'The AI model is unavailable or misconfigured. Please contact support.';
 
 function parseRetryDelaySeconds(errorMessage) {
   const retryMatch = errorMessage.match(RETRY_DELAY_PATTERN);
@@ -88,6 +89,10 @@ function formatGeminiError(error) {
     return QUOTA_ERROR;
   }
 
+  if (MODEL_NOT_FOUND_PATTERN.test(errorMessage)) {
+    return MODEL_NOT_FOUND_ERROR;
+  }
+
   if (AUTH_FAILED_PATTERN.test(errorMessage) || API_KEY_KEYWORD_PATTERN.test(errorMessage)) {
     return INVALID_API_KEY_ERROR;
   }
@@ -108,6 +113,8 @@ export function isInitialized() {
   return model !== null;
 }
 
+const ANALYSIS_TIMEOUT_MS = 30_000;
+
 export async function identifyBug(imageBase64, mimeType = 'image/jpeg') {
   if (!model) {
     throw new Error('Gemini API not initialized. Please enter your API key.');
@@ -123,7 +130,16 @@ export async function identifyBug(imageBase64, mimeType = 'image/jpeg') {
   let text;
 
   try {
-    const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Analysis timed out. Please try again.')),
+        ANALYSIS_TIMEOUT_MS,
+      ),
+    );
+    const result = await Promise.race([
+      model.generateContent([SYSTEM_PROMPT, imagePart]),
+      timeoutPromise,
+    ]);
     const response = await result.response;
     text = response.text();
   } catch (error) {

@@ -89,7 +89,7 @@ test.describe('Full Analysis Flow', () => {
     expect(keyHeader).toContain('test-api-key-12345');
   });
 
-  // Verifies the model name embedded in the URL — exposes Bug #1
+  // Verifies the model name embedded in the URL — was Bug #1 (now fixed)
   test('CRITICAL-BUG: request URL uses gemini-1.5-flash which is 404 on v1beta', async ({ page }) => {
     let capturedUrl = '';
     await page.unroute('https://generativelanguage.googleapis.com/**');
@@ -104,10 +104,8 @@ test.describe('Full Analysis Flow', () => {
 
     await uploadAndWaitForResults(page);
 
-    // Document the model in use — the real API returns 404 for this model+version
-    expect(capturedUrl).toContain('gemini-1.5-flash');
-    // The correct model for v1beta would be e.g. "gemini-2.0-flash" or
-    // "gemini-1.5-flash-001". Update GEMINI_MODEL constant to fix.
+    // Model has been updated to gemini-2.0-flash which works on v1beta
+    expect(capturedUrl).toContain('gemini-2.0-flash');
   });
 
   test('Gemini response wrapped in markdown fences is parsed correctly', async ({ page }) => {

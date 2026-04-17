@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import ApiKeyInput from './components/ApiKeyInput';
 import CameraView from './components/CameraView';
@@ -16,6 +16,7 @@ const VIEWS = {
 };
 
 const API_KEY_STORAGE_KEY = 'earthbug_api_key';
+const SCAN_HISTORY_STORAGE_KEY = 'earthbug_scan_history';
 
 function readStoredApiKey() {
   return window.localStorage.getItem(API_KEY_STORAGE_KEY)?.trim() ?? '';
@@ -29,14 +30,37 @@ function clearStoredApiKey() {
   window.localStorage.removeItem(API_KEY_STORAGE_KEY);
 }
 
+function readStoredScanHistory() {
+  try {
+    const stored = window.localStorage.getItem(SCAN_HISTORY_STORAGE_KEY);
+    if (!stored) return [];
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+function storeScanHistory(history) {
+  try {
+    window.localStorage.setItem(SCAN_HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // Silently ignore if localStorage is full
+  }
+}
+
 export default function App() {
   const [view, setView] = useState(VIEWS.API_KEY);
   const [apiKey, setApiKey] = useState('');
   const [capturedImage, setCapturedImage] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [scanHistory, setScanHistory] = useState([]);
+  const [scanHistory, setScanHistory] = useState(() => readStoredScanHistory());
+  const analysisCancelledRef = useRef(false);
   const cameraHook = useCamera();
+
+  useEffect(() => {
+    storeScanHistory(scanHistory);
+  }, [scanHistory]);
 
   useEffect(() => {
     try {
@@ -93,24 +117,38 @@ export default function App() {
     setView(VIEWS.API_KEY);
   }, [cameraHook]);
 
+  const cancelAnalysis = useCallback(() => {
+    analysisCancelledRef.current = true;
+    setCapturedImage(null);
+    setView(VIEWS.CAMERA);
+  }, []);
+
   const analyzeImage = useCallback(async (photo) => {
+    analysisCancelledRef.current = false;
     setCapturedImage(photo.dataUrl);
     setView(VIEWS.ANALYZING);
     setError(null);
 
     try {
       const analysis = await identifyBug(photo.base64, photo.mimeType);
+
+      if (analysisCancelledRef.current) return;
+
       setResult(analysis);
 
       if (!analysis.error) {
-        setScanHistory(prev => [
-          { ...analysis, imageUrl: photo.dataUrl, timestamp: Date.now() },
-          ...prev,
-        ].slice(0, 10));
+        setScanHistory(prev => {
+          const deduped = prev.filter(item => item.name !== analysis.name);
+          return [
+            { ...analysis, imageUrl: photo.dataUrl, timestamp: Date.now() },
+            ...deduped,
+          ].slice(0, 10);
+        });
       }
 
       setView(VIEWS.RESULTS);
     } catch (err) {
+      if (analysisCancelledRef.current) return;
       console.error('Analysis failed:', err);
       setError(err.message);
       setView(VIEWS.CAMERA);
@@ -158,7 +196,7 @@ export default function App() {
         )}
 
         {view === VIEWS.ANALYZING && (
-          <AnalyzingView imageUrl={capturedImage} />
+          <AnalyzingView imageUrl={capturedImage} onCancel={cancelAnalysis} />
         )}
 
         {view === VIEWS.RESULTS && result && (

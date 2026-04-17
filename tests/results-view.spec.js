@@ -219,8 +219,7 @@ test.describe('Results View', () => {
     await expect(page.getByRole('button', { name: /share find/i })).toBeVisible();
   });
 
-  // BUG: If result.name is undefined (Gemini returns partial JSON), the img
-  // alt attribute renders as "undefined" — an accessibility failure.
+  // alt attribute now falls back to 'Identified bug' when result.name is undefined
   test('KNOWN-BUG: missing name in result renders img alt as "undefined"', async ({ page, browser }) => {
     const ctx = await browser.newContext();
     const p = await ctx.newPage();
@@ -247,10 +246,8 @@ test.describe('Results View', () => {
     await expect(p.getByText('Garden Buddy')).toBeVisible({ timeout: 15_000 });
 
     const altText = await p.locator('img').first().getAttribute('alt');
-    // In React, undefined prop values are omitted from the DOM, so getAttribute
-    // returns null — the <img> has NO alt attribute at all, which is the actual
-    // accessibility bug (missing alt, not literally the string "undefined").
-    expect(altText).toBeNull();
+    // After fix: alt falls back to 'Identified bug' instead of being absent
+    expect(altText).toBe('Identified bug');
     await ctx.close();
   });
 });

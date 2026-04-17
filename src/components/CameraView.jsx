@@ -37,6 +37,9 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload, onChan
   const handleSelectedFile = useCallback(async (file, invalidFileMessage) => {
     if (!file.type.startsWith('image/')) {
       setUploadError(invalidFileMessage);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
@@ -59,6 +62,9 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload, onChan
     } catch (imageError) {
       console.error('Image processing failed:', imageError);
       setUploadError('Could not read that image. Please try another one.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   }, [onFileUpload]);
 
