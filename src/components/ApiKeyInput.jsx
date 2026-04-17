@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-export default function ApiKeyInput({ onSubmit }) {
-  const [key, setKey] = useState('');
+export default function ApiKeyInput({ initialKey = '', onSubmit }) {
+  const [key, setKey] = useState(initialKey);
   const [show, setShow] = useState(false);
+  const descriptionId = 'gemini-api-key-description';
+
+  useEffect(() => {
+    setKey(initialKey);
+  }, [initialKey]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -17,9 +22,12 @@ export default function ApiKeyInput({ onSubmit }) {
       <h2 className="font-display text-xl font-semibold text-earth-800 mb-2">
         Connect to Google Gemini
       </h2>
-      <p className="text-earth-500 text-sm mb-5">
+      <p
+        id={descriptionId}
+        className="text-earth-500 text-sm mb-5"
+      >
         Enter your Gemini API key to start identifying bugs.
-        Your key stays in your browser — it's never sent to our servers.
+        Your key is stored only in this browser — never sent to our servers.
       </p>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="relative">
@@ -28,6 +36,10 @@ export default function ApiKeyInput({ onSubmit }) {
             value={key}
             onChange={(e) => setKey(e.target.value)}
             placeholder="AIza..."
+            autoFocus
+            aria-label="Gemini API key"
+            aria-describedby={descriptionId}
+            autoComplete="off"
             className="w-full px-4 py-3 rounded-xl border border-earth-200 bg-earth-50
                        focus:outline-none focus:ring-2 focus:ring-leaf-400 focus:border-transparent
                        text-earth-800 placeholder-earth-300 pr-16"
@@ -35,6 +47,7 @@ export default function ApiKeyInput({ onSubmit }) {
           <button
             type="button"
             onClick={() => setShow(!show)}
+            aria-label={show ? 'Hide API key' : 'Show API key'}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-earth-400 hover:text-earth-600 text-sm"
           >
             {show ? 'Hide' : 'Show'}
