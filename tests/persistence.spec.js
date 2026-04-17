@@ -63,8 +63,7 @@ test.describe('localStorage Persistence', () => {
     expect(stored).toBe('AIza-new-key');
   });
 
-  // BUG: Scan history lives only in React state — not in localStorage.
-  // Refreshing the page destroys all scan history.
+  // Scan history is now persisted to localStorage
   test('KNOWN-BUG: scan history is not persisted to localStorage', async ({ page }) => {
     await page.evaluate(() =>
       window.localStorage.setItem('earthbug_api_key', 'AIza-key'),
@@ -73,6 +72,6 @@ test.describe('localStorage Persistence', () => {
 
     const keys = await page.evaluate(() => Object.keys(window.localStorage));
     const hasHistoryKey = keys.some((k) => k.toLowerCase().includes('history'));
-    expect(hasHistoryKey).toBe(false);
+    expect(hasHistoryKey).toBe(true);
   });
 });

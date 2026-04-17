@@ -107,9 +107,7 @@ test.describe('Share Functionality', () => {
     await expect(page.getByText(/copied to clipboard|could not copy|not supported/i)).not.toBeVisible();
   });
 
-  // BUG: share toast uses role="status" — there are TWO role="status"
-  // elements on the page (confidence badge + toast). aria-live ordering
-  // could conflict for screen-reader users.
+  // Confidence badge now uses role="img" — only the toast has role="status"
   test('KNOWN-BUG: page has multiple role="status" elements (accessibility)', async ({ page }) => {
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
@@ -119,7 +117,7 @@ test.describe('Share Functionality', () => {
     await expect(page.getByText(/copied to clipboard/i)).toBeVisible();
 
     const statusCount = await page.getByRole('status').count();
-    // Confidence badge + share toast = 2 role="status" elements simultaneously
-    expect(statusCount).toBeGreaterThan(1); // documents the duplicate
+    // After fix: only the share toast has role="status" (confidence badge uses role="img")
+    expect(statusCount).toBe(1);
   });
 });

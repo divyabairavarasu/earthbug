@@ -77,40 +77,58 @@ test.describe('Scan History', () => {
   });
 
   test('history is limited to 10 entries', async ({ page }) => {
-    // Run 11 scans
+    // Run 11 scans with distinct bug names so deduplication doesn't interfere
     for (let i = 0; i < 11; i++) {
-      await runOneScan(page);
+      const bugName = `TestBug${i}`;
+      await page.unroute('https://generativelanguage.googleapis.com/**');
+      await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            candidates: [{
+              content: { parts: [{ text: JSON.stringify({ ...MOCK_BUG_ANALYSIS, name: bugName }) }], role: 'model' },
+              finishReason: 'STOP',
+            }],
+          }),
+        }),
+      );
+      const [chooser] = await Promise.all([
+        page.waitForEvent('filechooser'),
+        page.getByRole('button', { name: /upload photo/i }).click(),
+      ]);
+      await chooser.setFiles(ensureTestJpeg());
+      await expect(page.getByRole('heading', { name: bugName })).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: /scan another bug/i }).click();
+      await expect(page.getByRole('button', { name: /open camera/i })).toBeVisible();
     }
     const thumbs = page.locator('.grid button');
     await expect(thumbs).toHaveCount(10);
   });
 
-  // BUG: Scan history is stored in React state (in-memory only).
-  // A page refresh loses all history. This is documented behaviour but
-  // may surprise users who expect persistence.
+  // Scan history is now persisted to localStorage — survives page refresh
   test('KNOWN-BUG: scan history is lost on page refresh', async ({ page }) => {
     await runOneScan(page);
     await expect(page.getByText(/recent scans/i)).toBeVisible();
 
     await page.reload();
 
-    // After reload, history is gone
-    await expect(page.getByText(/recent scans/i)).not.toBeVisible();
+    // After reload, history is restored from localStorage
+    await expect(page.getByText(/recent scans/i)).toBeVisible({ timeout: 5000 });
   });
 
-  // BUG: Scanning the same bug multiple times adds duplicate entries.
-  // No de-duplication by name or image hash is performed.
+  // Scan history is now deduplicated by bug name
   test('KNOWN-BUG: scanning same bug multiple times adds duplicate history entries', async ({ page }) => {
     await runOneScan(page);
     await runOneScan(page);
 
     const thumbs = page.locator('.grid button');
     const count = await thumbs.count();
-    // Both entries have the same name — duplicates allowed
-    expect(count).toBe(2);
+    // After deduplication, only 1 entry for the same bug name
+    expect(count).toBe(1);
 
     const names = await thumbs.allInnerTexts();
-    expect(names.filter((n) => n.includes(MOCK_BUG_ANALYSIS.name))).toHaveLength(2);
+    expect(names.filter((n) => n.includes(MOCK_BUG_ANALYSIS.name))).toHaveLength(1);
   });
 
   // BUG: Gemini "error" responses (no bug found) are NOT added to history,

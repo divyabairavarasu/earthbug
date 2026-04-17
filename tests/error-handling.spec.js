@@ -54,17 +54,11 @@ test.describe('Error Handling — Gemini API failures', () => {
     });
 
     await uploadFile(page, ensureTestJpeg());
-    // (The Analyzing view may appear and disappear faster than Playwright can
-    // poll for it when the mock responds synchronously — skip that assertion.)
 
-    // The app returns the generic message — no mention of model/configuration
+    // After fix: shows a helpful model-unavailable message
     await expect(
-      page.getByText(/earthbug could not analyze that photo right now/i),
+      page.getByText(/the ai model is unavailable/i),
     ).toBeVisible({ timeout: 10_000 });
-
-    // WHAT SHOULD HAPPEN: a message like "The AI model is unavailable or
-    // misconfigured. Please contact support." Users currently have no way
-    // to understand or resolve this error.
   });
 
   // ── Quota / Rate Limit ────────────────────────────────────────────────────
@@ -127,8 +121,7 @@ test.describe('Error Handling — Gemini API failures', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  // BUG: AUTH_FAILED_PATTERN = /401|403/ matches *any* string containing
-  // those digits (e.g. "error 4013", response with id "403abc").
+  // AUTH_FAILED_PATTERN now uses word boundaries — no false positives
   test('KNOWN-BUG: AUTH_FAILED_PATTERN falsely matches strings containing "401"', async ({ page }) => {
     // Craft an error whose message contains "401" in a non-status context
     await mockGeminiError(page, 500, {
@@ -141,15 +134,13 @@ test.describe('Error Handling — Gemini API failures', () => {
 
     await uploadFile(page, ensureTestJpeg());
 
-    // Should show generic error — but the regex will match "401" inside "40138"
-    // and incorrectly show the "API key rejected" message.
+    // After fix: shows generic error, not auth error (word boundary prevents false positive)
     await expect(
-      page.getByText(/api key was rejected/i),
+      page.getByText(/earthbug could not analyze that photo right now/i),
     ).toBeVisible({ timeout: 10_000 });
-    // ^ This is the BUG: should show generic error, not auth error.
   });
 
-  // BUG: QUOTA_EXCEEDED_PATTERN = /429/ matches any string containing "429"
+  // QUOTA_EXCEEDED_PATTERN now uses word boundaries — no false positives
   test('KNOWN-BUG: QUOTA_EXCEEDED_PATTERN falsely matches strings containing "429"', async ({ page }) => {
     await mockGeminiError(page, 500, {
       error: {
@@ -161,11 +152,10 @@ test.describe('Error Handling — Gemini API failures', () => {
 
     await uploadFile(page, ensureTestJpeg());
 
-    // Should show generic error — but regex matches "429" inside "4299"
+    // After fix: shows generic error, not quota error (word boundary prevents false positive)
     await expect(
-      page.getByText(/quota limit/i),
+      page.getByText(/earthbug could not analyze that photo right now/i),
     ).toBeVisible({ timeout: 10_000 });
-    // ^ BUG: should show generic error, not quota error.
   });
 
   // ── Network failures ──────────────────────────────────────────────────────
@@ -235,19 +225,19 @@ test.describe('Error Handling — Gemini API failures', () => {
     await expect(page.getByText(/could not parse/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  // BUG: No way to cancel or timeout a hung analysis.
-  // If Gemini never responds, the user is permanently stuck on AnalyzingView.
+  // Cancel button is now available on the analyzing screen
   test('KNOWN-BUG: hung Gemini request leaves user permanently on analyzing screen', async ({ page }) => {
     await mockGeminiTimeout(page);
 
     await uploadFile(page, ensureTestJpeg());
     await expect(page.getByText(/analyzing/i)).toBeVisible({ timeout: 5000 });
 
-    // After 5 seconds user is still stuck — no cancel button, no timeout
-    await page.waitForTimeout(5000);
-    await expect(page.getByText(/analyzing/i)).toBeVisible();
-    // No cancel button exists
-    await expect(page.getByRole('button', { name: /cancel/i })).not.toBeVisible();
+    // Cancel button is now present
+    await expect(page.getByRole('button', { name: /cancel/i })).toBeVisible();
+
+    // Clicking cancel returns user to camera view
+    await page.getByRole('button', { name: /cancel/i }).click();
+    await expect(page.getByRole('button', { name: /open camera/i })).toBeVisible();
   });
 
   // ── Error banner UX ───────────────────────────────────────────────────────

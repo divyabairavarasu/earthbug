@@ -161,13 +161,12 @@ test.describe('File Upload', () => {
     });
   });
 
-  // BUG: GIF files bypass compression and are sent as-is to Gemini.
-  // For a large animated GIF this could send megabytes to the API.
+  // GIF is now compressed to JPEG before sending to the API
   test('KNOWN-BUG: GIF upload bypasses compression and sends raw base64', async ({ page }) => {
     const requests = [];
     await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
       const body = route.request().postDataJSON();
-      // Check if mimeType is image/gif (compression was skipped)
+      // Check the mimeType sent to the API
       const mimeType = body?.contents?.[0]?.parts?.find?.(
         p => p.inlineData,
       )?.inlineData?.mimeType;
@@ -186,8 +185,8 @@ test.describe('File Upload', () => {
     await chooser.setFiles(ensureTestGif());
     await expect(page.getByRole('heading', { name: 'Ladybug' })).toBeVisible({ timeout: 10_000 });
 
-    // GIF bypasses compression → mimeType sent is image/gif, not image/jpeg
-    expect(requests[0]).toBe('image/gif'); // documents the behaviour — not necessarily desired
+    // GIF is now compressed → mimeType sent is image/jpeg
+    expect(requests[0]).toBe('image/jpeg');
   });
 
   // BUG: File input is not reset on error, so re-selecting the same file
