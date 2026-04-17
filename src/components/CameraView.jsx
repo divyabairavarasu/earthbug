@@ -9,7 +9,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   'image/svg+xml',
 ]);
 
-export default function CameraView({ cameraHook, onCapture, onFileUpload, onChangeApiKey }) {
+export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
   const { videoRef, isActive, error, startCamera, stopCamera, capturePhoto, flipCamera } = cameraHook;
   const fileInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -154,13 +154,6 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload, onChan
             onChange={handleFileChange}
             className="hidden"
           />
-          <button
-            type="button"
-            onClick={onChangeApiKey}
-            className="text-sm text-earth-500 hover:text-earth-700 underline underline-offset-2"
-          >
-            Change API key
-          </button>
         </div>
       ) : (
         <div className="space-y-4">

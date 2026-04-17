@@ -6,14 +6,16 @@ A user will show you a photo of a bug/insect they found. Your job is to:
 1. Identify the bug (common name and scientific name)
 2. Explain how it helps plants and soil (benefits)
 3. Explain any harm it causes to plants and soil (harms)
-4. Give an overall verdict: "Garden Buddy" (mostly helpful), "Garden Bully" (mostly harmful), or "It's Complicated" (mixed)
+4. Give an overall verdict: "Mostly Helpful", "Mostly Harmful", "Context-Dependent", or "Neutral Visitor"
 5. Share one fascinating "Did You Know?" fact about this bug
+6. Provide a one-sentence nuance or caveat about the verdict
+7. Suggest 2-4 concrete eco-friendly actions the user can take related to this bug
 
 IMPORTANT: Respond ONLY in valid JSON format with this exact structure:
 {
   "name": "Common Name",
   "scientificName": "Scientific name",
-  "verdict": "Garden Buddy" | "Garden Bully" | "It's Complicated",
+  "verdict": "Mostly Helpful" | "Mostly Harmful" | "Context-Dependent" | "Neutral Visitor",
   "confidence": "high" | "medium" | "low",
   "summary": "One sentence summary of what this bug is",
   "benefits": [
@@ -25,7 +27,9 @@ IMPORTANT: Respond ONLY in valid JSON format with this exact structure:
   "ecosystemRole": "2-3 sentences about where this bug fits in the local ecosystem and food chain",
   "didYouKnow": "One fascinating fact about this bug",
   "soilImpact": "positive" | "negative" | "neutral",
-  "plantImpact": "positive" | "negative" | "neutral"
+  "plantImpact": "positive" | "negative" | "neutral",
+  "nuance": "One sentence explaining the nuance or caveat to this verdict",
+  "ecoActions": ["Action 1", "Action 2", "Action 3"]
 }
 
 If the image does not contain a recognizable bug or insect, respond with:
@@ -264,5 +268,48 @@ function isSafeObject(obj) {
     }
     console.error('Failed to parse Gemini response:', text);
     throw new Error('Could not parse the bug analysis. Please try again.');
+  }
+}
+
+export function createBugChat(analysisResult, imageBase64, mimeType = 'image/jpeg') {
+  if (!model) {
+    throw new Error('Gemini API not initialized. Please enter your API key.');
+  }
+
+  const history = [
+    {
+      role: 'user',
+      parts: [
+        { text: SYSTEM_PROMPT },
+        { inlineData: { data: imageBase64, mimeType } },
+      ],
+    },
+    {
+      role: 'model',
+      parts: [{ text: JSON.stringify(analysisResult) }],
+    },
+  ];
+
+  return model.startChat({ history, safetySettings: SAFETY_SETTINGS });
+}
+
+export async function askFollowUp(chat, question) {
+  if (!question || !question.trim()) {
+    throw new Error('Question cannot be empty.');
+  }
+
+  try {
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Request timed out. Please try again.')),
+        ANALYSIS_TIMEOUT_MS,
+      ),
+    );
+
+    const result = await Promise.race([chat.sendMessage(question.trim()), timeoutPromise]);
+    const response = await result.response;
+    return response.text();
+  } catch {
+    return 'Could not get an answer. Please try again.';
   }
 }
