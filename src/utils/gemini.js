@@ -39,6 +39,64 @@ Keep language accessible and friendly — imagine explaining to a curious garden
 let genAI = null;
 let model = null;
 
+const HTTP_STATUS_QUOTA_EXCEEDED = 429;
+const HTTP_STATUS_UNAUTHORIZED = 401;
+const HTTP_STATUS_FORBIDDEN = 403;
+
+const QUOTA_EXCEEDED_PATTERN = new RegExp(String(HTTP_STATUS_QUOTA_EXCEEDED));
+const AUTH_FAILED_PATTERN = new RegExp(
+  `${HTTP_STATUS_UNAUTHORIZED}|${HTTP_STATUS_FORBIDDEN}`,
+);
+const QUOTA_KEYWORD_PATTERN = /quota exceeded/i;
+const API_KEY_KEYWORD_PATTERN = /api key/i;
+const NETWORK_FAILURE_PATTERN = /network|fetch failed|failed to fetch/i;
+const RETRY_DELAY_PATTERN = /Please retry in\s+([\d.]+)s/i;
+
+const DEFAULT_ANALYSIS_ERROR =
+  'EarthBug could not analyze that photo right now. Please try again.';
+const QUOTA_ERROR =
+  'Your Gemini API key has hit its current quota limit. Please wait a bit and try again, or check your Gemini plan and billing.';
+const INVALID_API_KEY_ERROR =
+  'That Gemini API key was rejected. Please check the key and try again.';
+const NETWORK_ERROR =
+  'EarthBug could not reach Gemini. Please check your connection and try again.';
+
+function parseRetryDelaySeconds(errorMessage) {
+  const retryMatch = errorMessage.match(RETRY_DELAY_PATTERN);
+
+  if (!retryMatch) {
+    return null;
+  }
+
+  const retrySeconds = Math.ceil(Number(retryMatch[1]));
+
+  return Number.isFinite(retrySeconds) ? retrySeconds : null;
+}
+
+function formatGeminiError(error) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  if (QUOTA_EXCEEDED_PATTERN.test(errorMessage) || QUOTA_KEYWORD_PATTERN.test(errorMessage)) {
+    const retrySeconds = parseRetryDelaySeconds(errorMessage);
+
+    if (retrySeconds) {
+      return `${QUOTA_ERROR} Retry in about ${retrySeconds} seconds.`;
+    }
+
+    return QUOTA_ERROR;
+  }
+
+  if (AUTH_FAILED_PATTERN.test(errorMessage) || API_KEY_KEYWORD_PATTERN.test(errorMessage)) {
+    return INVALID_API_KEY_ERROR;
+  }
+
+  if (NETWORK_FAILURE_PATTERN.test(errorMessage)) {
+    return NETWORK_ERROR;
+  }
+
+  return DEFAULT_ANALYSIS_ERROR;
+}
+
 export function initGemini(apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
   model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -60,9 +118,16 @@ export async function identifyBug(imageBase64, mimeType = 'image/jpeg') {
     },
   };
 
-  const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
-  const response = await result.response;
-  const text = response.text();
+  let text;
+
+  try {
+    const result = await model.generateContent([SYSTEM_PROMPT, imagePart]);
+    const response = await result.response;
+    text = response.text();
+  } catch (error) {
+    console.error('Gemini request failed:', error);
+    throw new Error(formatGeminiError(error));
+  }
 
   // Extract JSON from response (handle markdown code blocks)
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
