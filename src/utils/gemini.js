@@ -36,7 +36,7 @@ If the image does not contain a recognizable bug or insect, respond with:
 
 Keep language accessible and friendly — imagine explaining to a curious gardener.`;
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3-flash-preview';
 
 let genAI = null;
 let model = null;
