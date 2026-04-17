@@ -42,7 +42,9 @@ function readStoredScanHistory() {
 
 function storeScanHistory(history) {
   try {
-    window.localStorage.setItem(SCAN_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    // Never write image data (base64 data URLs) to localStorage — keep it in-memory only
+    const safeHistory = history.map(({ imageUrl: _imageUrl, ...item }) => item);
+    window.localStorage.setItem(SCAN_HISTORY_STORAGE_KEY, JSON.stringify(safeHistory));
   } catch {
     // Silently ignore if localStorage is full
   }
@@ -56,6 +58,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [scanHistory, setScanHistory] = useState(() => readStoredScanHistory());
   const analysisCancelledRef = useRef(false);
+  const isAnalyzingRef = useRef(false);
   const cameraHook = useCamera();
 
   useEffect(() => {
@@ -119,11 +122,15 @@ export default function App() {
 
   const cancelAnalysis = useCallback(() => {
     analysisCancelledRef.current = true;
+    isAnalyzingRef.current = false;
     setCapturedImage(null);
     setView(VIEWS.CAMERA);
   }, []);
 
   const analyzeImage = useCallback(async (photo) => {
+    // In-flight guard — ignore duplicate submissions while analysis is running
+    if (isAnalyzingRef.current) return;
+    isAnalyzingRef.current = true;
     analysisCancelledRef.current = false;
     setCapturedImage(photo.dataUrl);
     setView(VIEWS.ANALYZING);
@@ -152,6 +159,8 @@ export default function App() {
       console.error('Analysis failed:', err);
       setError(err.message);
       setView(VIEWS.CAMERA);
+    } finally {
+      isAnalyzingRef.current = false;
     }
   }, []);
 
@@ -225,11 +234,17 @@ export default function App() {
                   className="group relative aspect-square rounded-xl overflow-hidden border-2 border-earth-100
                              hover:border-leaf-400 transition-colors"
                 >
-                  <img
-                    src={scan.imageUrl}
-                    alt={scan.name}
-                    className="w-full h-full object-cover"
-                  />
+                  {scan.imageUrl ? (
+                    <img
+                      src={scan.imageUrl}
+                      alt={scan.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-earth-100 text-2xl">
+                      {scan.verdict === 'Garden Buddy' ? '🌱' : scan.verdict === 'Garden Bully' ? '⚠️' : '🤷'}
+                    </div>
+                  )}
                   <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                     <p className="text-white text-xs font-medium truncate">{scan.name}</p>
                   </div>

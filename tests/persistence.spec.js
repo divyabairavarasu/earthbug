@@ -74,4 +74,47 @@ test.describe('localStorage Persistence', () => {
     const hasHistoryKey = keys.some((k) => k.toLowerCase().includes('history'));
     expect(hasHistoryKey).toBe(true);
   });
+
+  test('scan history in localStorage never contains image data (base64)', async ({ page }) => {
+    // Seed API key and mock Gemini
+    await page.goto('/');
+    await page.evaluate(() => {
+      window.localStorage.setItem('earthbug_api_key', 'test-api-key-12345');
+    });
+    await page.reload();
+
+    // Mock Gemini and upload a file to produce one history entry
+    const { mockGeminiSuccess } = await import('./helpers/mock-gemini.js');
+    await mockGeminiSuccess(page);
+
+    const path = await import('path');
+    const fs = await import('fs');
+    const { fileURLToPath } = await import('url');
+    const __dirname = path.default.dirname(fileURLToPath(import.meta.url));
+    const jpegPath = path.default.join(__dirname, 'fixtures', 'test-bug.jpg');
+    if (!fs.default.existsSync(jpegPath)) {
+      const buf = Buffer.from(
+        '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAARCAABAAEDASIA' +
+        '/8QAFgABAQEAAAAAAAAAAAAAAAAABgUEB//EABoQAAMBAQEBAAAAAAAAAAAAAAECAwARBP/EABQBAQAAAAAAAAAAAAAAAAAAAAD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwDJ' +
+        '5OjPTK9xvt9GSSP/2Q==',
+        'base64',
+      );
+      fs.default.writeFileSync(jpegPath, buf);
+    }
+
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.getByRole('button', { name: /upload photo/i }).click(),
+    ]);
+    await chooser.setFiles(jpegPath);
+    await expect(page.getByRole('heading', { name: /ladybug/i })).toBeVisible({ timeout: 15_000 });
+
+    // Read what was actually stored in localStorage
+    const stored = await page.evaluate(() =>
+      window.localStorage.getItem('earthbug_scan_history'),
+    );
+    expect(stored).not.toBeNull();
+    expect(stored).not.toContain('data:image');
+    expect(stored).not.toContain('base64');
+  });
 });

@@ -219,7 +219,7 @@ test.describe('Results View', () => {
     await expect(page.getByRole('button', { name: /share find/i })).toBeVisible();
   });
 
-  // alt attribute now falls back to 'Identified bug' when result.name is undefined
+  // Response validation now rejects a missing name field before reaching the UI
   test('KNOWN-BUG: missing name in result renders img alt as "undefined"', async ({ page, browser }) => {
     const ctx = await browser.newContext();
     const p = await ctx.newPage();
@@ -242,12 +242,8 @@ test.describe('Results View', () => {
       p.getByRole('button', { name: /upload photo/i }).click(),
     ]);
     await chooser.setFiles(ensureTestPng());
-    // Wait for results view to appear
-    await expect(p.getByText('Garden Buddy')).toBeVisible({ timeout: 15_000 });
-
-    const altText = await p.locator('img').first().getAttribute('alt');
-    // After fix: alt falls back to 'Identified bug' instead of being absent
-    expect(altText).toBe('Identified bug');
+    // After security fix: missing 'name' is rejected as an invalid response
+    await expect(p.getByText(/missing required fields/i)).toBeVisible({ timeout: 15_000 });
     await ctx.close();
   });
 });

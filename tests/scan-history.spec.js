@@ -20,6 +20,9 @@ function ensureTestJpeg() {
 }
 
 async function runOneScan(page) {
+  // Reset client-side throttle so successive scans within the same test aren't blocked
+  await page.evaluate(() => window.__earthbugResetRateLimit?.());
+
   await page.unroute('https://generativelanguage.googleapis.com/**');
   await page.route('https://generativelanguage.googleapis.com/**', (route) =>
     route.fulfill({
@@ -80,6 +83,8 @@ test.describe('Scan History', () => {
     // Run 11 scans with distinct bug names so deduplication doesn't interfere
     for (let i = 0; i < 11; i++) {
       const bugName = `TestBug${i}`;
+      // Reset throttle so successive uploads in this loop aren't blocked
+      await page.evaluate(() => window.__earthbugResetRateLimit?.());
       await page.unroute('https://generativelanguage.googleapis.com/**');
       await page.route('https://generativelanguage.googleapis.com/**', (route) =>
         route.fulfill({
