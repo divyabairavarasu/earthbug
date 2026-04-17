@@ -36,6 +36,8 @@ If the image does not contain a recognizable bug or insect, respond with:
 
 Keep language accessible and friendly — imagine explaining to a curious gardener.`;
 
+const GEMINI_MODEL = 'gemini-1.5-flash';
+
 let genAI = null;
 let model = null;
 
@@ -99,7 +101,7 @@ function formatGeminiError(error) {
 
 export function initGemini(apiKey) {
   genAI = new GoogleGenerativeAI(apiKey);
-  model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 }
 
 export function isInitialized() {
