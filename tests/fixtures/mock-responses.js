@@ -81,6 +81,14 @@ export const MALFORMED_JSON_HTTP_BODY = buildGeminiHttpResponse(
 
 export const EMPTY_TEXT_HTTP_BODY = buildGeminiHttpResponse('');
 
+export const QUOTA_EXCEEDED_HTTP_BODY = {
+  error: {
+    code: 429,
+    message: 'Resource has been exhausted. Please retry in 0s.',
+    status: 'RESOURCE_EXHAUSTED',
+  },
+};
+
 // Response simulating Gemini safety filters blocking the content
 export const SAFETY_BLOCKED_HTTP_BODY = {
   candidates: [

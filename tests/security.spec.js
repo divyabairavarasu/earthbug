@@ -114,7 +114,8 @@ test.describe('Security — Content safety (obscene/inappropriate images)', () =
 
     const historyBefore = await page.locator('.grid button').count();
 
-    // Now do a safety-blocked scan
+    // Now do a safety-blocked scan — reset throttle first
+    await page.evaluate(() => window.__earthbugResetRateLimit?.());
     await page.unroute('https://generativelanguage.googleapis.com/**');
     await mockGeminiSafetyBlock(page);
     await uploadFile(page, ensureTestJpeg());

@@ -58,6 +58,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [scanHistory, setScanHistory] = useState(() => readStoredScanHistory());
   const analysisCancelledRef = useRef(false);
+  const isAnalyzingRef = useRef(false);
   const cameraHook = useCamera();
 
   useEffect(() => {
@@ -121,11 +122,15 @@ export default function App() {
 
   const cancelAnalysis = useCallback(() => {
     analysisCancelledRef.current = true;
+    isAnalyzingRef.current = false;
     setCapturedImage(null);
     setView(VIEWS.CAMERA);
   }, []);
 
   const analyzeImage = useCallback(async (photo) => {
+    // In-flight guard — ignore duplicate submissions while analysis is running
+    if (isAnalyzingRef.current) return;
+    isAnalyzingRef.current = true;
     analysisCancelledRef.current = false;
     setCapturedImage(photo.dataUrl);
     setView(VIEWS.ANALYZING);
@@ -154,6 +159,8 @@ export default function App() {
       console.error('Analysis failed:', err);
       setError(err.message);
       setView(VIEWS.CAMERA);
+    } finally {
+      isAnalyzingRef.current = false;
     }
   }, []);
 
