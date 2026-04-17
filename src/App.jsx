@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import ApiKeyInput from './components/ApiKeyInput';
 import CameraView from './components/CameraView';
@@ -15,18 +15,83 @@ const VIEWS = {
   RESULTS: 'results',
 };
 
+const API_KEY_STORAGE_KEY = 'earthbug_api_key';
+
+function readStoredApiKey() {
+  return window.localStorage.getItem(API_KEY_STORAGE_KEY)?.trim() ?? '';
+}
+
+function storeApiKey(apiKey) {
+  window.localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+}
+
+function clearStoredApiKey() {
+  window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+}
+
 export default function App() {
   const [view, setView] = useState(VIEWS.API_KEY);
+  const [apiKey, setApiKey] = useState('');
   const [capturedImage, setCapturedImage] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [scanHistory, setScanHistory] = useState([]);
   const cameraHook = useCamera();
 
-  const handleApiKey = useCallback((key) => {
-    initGemini(key);
-    setView(VIEWS.CAMERA);
+  useEffect(() => {
+    try {
+      const storedApiKey = readStoredApiKey();
+
+      if (!storedApiKey) {
+        return;
+      }
+
+      initGemini(storedApiKey);
+      setApiKey(storedApiKey);
+      setView(VIEWS.CAMERA);
+    } catch (storageError) {
+      console.error('Could not read saved Gemini API key:', storageError);
+      setError('Could not access saved API key storage in this browser.');
+    }
   }, []);
+
+  const handleApiKey = useCallback((key) => {
+    const trimmedKey = key.trim();
+
+    if (!trimmedKey) {
+      return;
+    }
+
+    try {
+      storeApiKey(trimmedKey);
+    } catch (storageError) {
+      console.error('Could not save Gemini API key:', storageError);
+      setError('Could not save your API key in this browser.');
+      return;
+    }
+
+    setApiKey(trimmedKey);
+    setView(VIEWS.CAMERA);
+    setError(null);
+    initGemini(trimmedKey);
+  }, []);
+
+  const handleChangeApiKey = useCallback(() => {
+    try {
+      clearStoredApiKey();
+    } catch (storageError) {
+      console.error('Could not clear saved Gemini API key:', storageError);
+      setError('Could not clear your saved API key in this browser.');
+      return;
+    }
+
+    cameraHook.stopCamera();
+    setApiKey('');
+    setCapturedImage(null);
+    setResult(null);
+    setError(null);
+    setView(VIEWS.API_KEY);
+  }, [cameraHook]);
 
   const analyzeImage = useCallback(async (photo) => {
     setCapturedImage(photo.dataUrl);
@@ -77,7 +142,10 @@ export default function App() {
         )}
 
         {view === VIEWS.API_KEY && (
-          <ApiKeyInput onSubmit={handleApiKey} />
+          <ApiKeyInput
+            initialKey={apiKey}
+            onSubmit={handleApiKey}
+          />
         )}
 
         {view === VIEWS.CAMERA && (
@@ -85,6 +153,7 @@ export default function App() {
             cameraHook={cameraHook}
             onCapture={analyzeImage}
             onFileUpload={analyzeImage}
+            onChangeApiKey={handleChangeApiKey}
           />
         )}
 

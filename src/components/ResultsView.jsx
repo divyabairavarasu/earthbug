@@ -1,4 +1,37 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+const SHARE_TOAST_TIMEOUT_MS = 2000;
+
+function buildShareText(result) {
+  return `I found a ${result.verdict}! ${result.summary} #EarthBug #EarthDay`;
+}
+
+function buildClipboardShareText(result) {
+  return `${buildShareText(result)}\n${window.location.href}`;
+}
+
 export default function ResultsView({ result, imageUrl, onScanAnother }) {
+  const headingRef = useRef(null);
+  const [shareToast, setShareToast] = useState(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [result.name]);
+
+  useEffect(() => {
+    if (!shareToast) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShareToast(null);
+    }, SHARE_TOAST_TIMEOUT_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [shareToast]);
+
   if (result.error) {
     return (
       <div className="card max-w-lg mx-auto text-center">
@@ -18,12 +51,43 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
   };
 
   const verdict = verdictConfig[result.verdict] || verdictConfig["It's Complicated"];
+  const shareData = useMemo(() => ({
+    title: `EarthBug: ${result.name}`,
+    text: buildShareText(result),
+    url: window.location.href,
+  }), [result]);
 
   const impactIcon = (impact) => {
     if (impact === 'positive') return '✅';
     if (impact === 'negative') return '❌';
     return '➖';
   };
+
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (shareError) {
+        if (shareError?.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      setShareToast('Copy is not supported in this browser.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildClipboardShareText(result));
+      setShareToast('Copied to clipboard!');
+    } catch (clipboardError) {
+      console.error('Could not copy share text:', clipboardError);
+      setShareToast('Could not copy the share text.');
+    }
+  }, [result, shareData]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -36,13 +100,20 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
             className="w-full aspect-[16/9] object-cover"
           />
           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent p-6 pt-16">
-            <h2 className="font-display text-3xl font-bold text-white mb-1">
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="font-display text-3xl font-bold text-white mb-1 focus:outline-none"
+            >
               {result.name}
             </h2>
             <p className="text-white/70 italic text-sm">{result.scientificName}</p>
           </div>
           {result.confidence && (
-            <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+            <div
+              role="status"
+              className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full"
+            >
               {result.confidence} confidence
             </div>
           )}
@@ -50,9 +121,14 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
 
         <div className="p-6">
           {/* Verdict badge */}
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${verdict.color} font-semibold text-lg mb-4`}>
-            <span className="text-xl">{verdict.emoji}</span>
-            {result.verdict}
+          <div className="flex flex-col items-start gap-3 mb-4">
+            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${verdict.color} font-semibold text-lg`}>
+              <span className="text-xl" aria-hidden="true">{verdict.emoji}</span>
+              {result.verdict}
+            </div>
+            <button onClick={handleShare} className="btn-secondary">
+              Share Find 🔗
+            </button>
           </div>
 
           <p className="text-earth-600 leading-relaxed">{result.summary}</p>
@@ -60,16 +136,28 @@ export default function ResultsView({ result, imageUrl, onScanAnother }) {
           {/* Quick impact indicators */}
           <div className="flex gap-4 mt-4 pt-4 border-t border-earth-100">
             <div className="flex items-center gap-2 text-sm text-earth-600">
-              <span>{impactIcon(result.soilImpact)}</span>
+              <span aria-hidden="true">{impactIcon(result.soilImpact)}</span>
+              <span className="sr-only">Soil impact is {result.soilImpact}.</span>
               <span>Soil: <span className="font-medium capitalize">{result.soilImpact}</span></span>
             </div>
             <div className="flex items-center gap-2 text-sm text-earth-600">
-              <span>{impactIcon(result.plantImpact)}</span>
+              <span aria-hidden="true">{impactIcon(result.plantImpact)}</span>
+              <span className="sr-only">Plant impact is {result.plantImpact}.</span>
               <span>Plants: <span className="font-medium capitalize">{result.plantImpact}</span></span>
             </div>
           </div>
         </div>
       </div>
+
+      {shareToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="card py-3 px-4 bg-leaf-50 border-leaf-200 text-sm text-leaf-800"
+        >
+          {shareToast}
+        </div>
+      )}
 
       {/* Benefits */}
       {result.benefits && result.benefits.length > 0 && (

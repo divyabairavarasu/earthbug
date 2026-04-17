@@ -1,44 +1,118 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { prepareImageForAnalysis, readFileAsDataUrl } from '../utils/imageUtils';
 
-export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
+export default function CameraView({ cameraHook, onCapture, onFileUpload, onChangeApiKey }) {
   const { videoRef, isActive, error, startCamera, stopCamera, capturePhoto, flipCamera } = cameraHook;
   const fileInputRef = useRef(null);
-  const [countdown, setCountdown] = useState(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   useEffect(() => {
     return () => stopCamera();
-  }, []);
+  }, [stopCamera]);
 
-  const handleCapture = () => {
-    const photo = capturePhoto();
+  useEffect(() => {
+    if (!uploadError) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUploadError(null);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [uploadError]);
+
+  const handleCapture = async () => {
+    const photo = await capturePhoto();
+
     if (photo) {
       stopCamera();
       onCapture(photo);
     }
   };
 
+  const handleSelectedFile = useCallback(async (file, invalidFileMessage) => {
+    if (!file.type.startsWith('image/')) {
+      setUploadError(invalidFileMessage);
+      return;
+    }
+
+    try {
+      const originalDataUrl = await readFileAsDataUrl(file);
+      const analysisImage = await prepareImageForAnalysis({
+        dataUrl: originalDataUrl,
+        mimeType: file.type || 'image/jpeg',
+      });
+
+      onFileUpload({
+        dataUrl: originalDataUrl,
+        base64: analysisImage.base64,
+        mimeType: analysisImage.mimeType,
+      });
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (imageError) {
+      console.error('Image processing failed:', imageError);
+      setUploadError('Could not read that image. Please try another one.');
+    }
+  }, [onFileUpload]);
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      const base64 = dataUrl.split(',')[1];
-      const mimeType = file.type || 'image/jpeg';
-      onFileUpload({ dataUrl, base64, mimeType });
-    };
-    reader.readAsDataURL(file);
+    if (!file) {
+      return;
+    }
+
+    void handleSelectedFile(file, 'Please choose an image file');
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    void handleSelectedFile(file, 'Please drop an image file');
   };
 
   return (
     <div className="card max-w-lg mx-auto">
       {!isActive ? (
         <div className="text-center space-y-4">
-          <div className="bg-earth-100 rounded-2xl p-12 flex flex-col items-center gap-4">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`rounded-2xl border-2 border-dashed p-12 flex flex-col items-center gap-4 transition-colors ${
+              isDragActive ? 'border-leaf-400 bg-leaf-50' : 'border-transparent bg-earth-100'
+            }`}
+          >
             <div className="text-6xl">📸</div>
             <p className="text-earth-600 font-medium">
               Found a bug? Let's identify it!
+            </p>
+            <p className="text-sm text-earth-500">
+              Or drag and drop a bug photo here.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -66,6 +140,13 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
             onChange={handleFileChange}
             className="hidden"
           />
+          <button
+            type="button"
+            onClick={onChangeApiKey}
+            className="text-sm text-earth-500 hover:text-earth-700 underline underline-offset-2"
+          >
+            Change API key
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -76,6 +157,7 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
               autoPlay
               playsInline
               muted
+              aria-label="Camera viewfinder"
               className="w-full h-full object-cover"
             />
             {/* Scan line overlay */}
@@ -86,18 +168,13 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
             <div className="absolute inset-0 pointer-events-none p-6">
               <div className="w-full h-full border-2 border-white/20 rounded-lg" />
             </div>
-            {/* Countdown overlay */}
-            {countdown && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <span className="text-white text-7xl font-bold">{countdown}</span>
-              </div>
-            )}
           </div>
 
           {/* Controls */}
           <div className="flex items-center justify-center gap-4">
             <button
               onClick={stopCamera}
+              aria-label="Stop camera"
               className="p-3 rounded-full bg-earth-200 hover:bg-earth-300 transition-colors"
               title="Cancel"
             >
@@ -108,6 +185,7 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
 
             <button
               onClick={handleCapture}
+              aria-label="Take photo"
               className="w-16 h-16 rounded-full bg-leaf-600 hover:bg-leaf-700 transition-all
                          shadow-lg hover:shadow-xl active:scale-90 flex items-center justify-center
                          ring-4 ring-leaf-200"
@@ -118,6 +196,7 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
 
             <button
               onClick={flipCamera}
+              aria-label="Flip camera"
               className="p-3 rounded-full bg-earth-200 hover:bg-earth-300 transition-colors"
               title="Flip camera"
             >
@@ -132,6 +211,12 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload }) {
       {error && (
         <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm text-center">
           {error}
+        </div>
+      )}
+
+      {uploadError && (
+        <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-sm text-center">
+          {uploadError}
         </div>
       )}
     </div>
