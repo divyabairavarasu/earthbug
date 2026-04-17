@@ -173,9 +173,39 @@ export async function identifyBug(imageBase64, mimeType = 'image/jpeg') {
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
   const jsonStr = jsonMatch[1].trim();
 
+const FORBIDDEN_KEYS = ['__proto__', 'constructor', 'prototype'];
+
+function isSafeObject(obj) {
+  if (typeof obj !== 'object' || obj === null) return true;
+  return !Object.getOwnPropertyNames(obj).some((k) => FORBIDDEN_KEYS.includes(k));
+}
+
   try {
-    return JSON.parse(jsonStr);
+    // Use reviver to catch __proto__ / constructor / prototype keys during parse
+    const parsed = JSON.parse(jsonStr, (key, value) => {
+      if (FORBIDDEN_KEYS.includes(key)) {
+        throw new Error('Response contained unsafe keys.');
+      }
+      return value;
+    });
+
+    if (!isSafeObject(parsed)) {
+      throw new Error('Response contained unsafe keys.');
+    }
+
+    if (parsed.error === true) {
+      return parsed;
+    }
+
+    if (!parsed.name || !parsed.verdict) {
+      throw new Error('The AI response was missing required fields.');
+    }
+
+    return parsed;
   } catch (e) {
+    if (e.message === 'Response contained unsafe keys.' || e.message === 'The AI response was missing required fields.') {
+      throw new Error(e.message);
+    }
     console.error('Failed to parse Gemini response:', text);
     throw new Error('Could not parse the bug analysis. Please try again.');
   }

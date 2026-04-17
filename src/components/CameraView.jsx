@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { prepareImageForAnalysis, readFileAsDataUrl } from '../utils/imageUtils';
 
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+]);
+
 export default function CameraView({ cameraHook, onCapture, onFileUpload, onChangeApiKey }) {
   const { videoRef, isActive, error, startCamera, stopCamera, capturePhoto, flipCamera } = cameraHook;
   const fileInputRef = useRef(null);
@@ -35,7 +43,7 @@ export default function CameraView({ cameraHook, onCapture, onFileUpload, onChan
   };
 
   const handleSelectedFile = useCallback(async (file, invalidFileMessage) => {
-    if (!file.type.startsWith('image/')) {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       setUploadError(invalidFileMessage);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
