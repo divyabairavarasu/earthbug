@@ -1,4 +1,4 @@
-import { SUCCESS_HTTP_BODY } from '../fixtures/mock-responses.js';
+import { SUCCESS_HTTP_BODY, SAFETY_BLOCKED_HTTP_BODY } from '../fixtures/mock-responses.js';
 
 export const GEMINI_URL_PATTERN = 'https://generativelanguage.googleapis.com/**';
 
@@ -35,6 +35,16 @@ export async function mockGeminiNetworkFailure(page) {
 export async function mockGeminiTimeout(page) {
   await page.route(GEMINI_URL_PATTERN, (_route) => {
     // Never fulfills — simulates a hung request
+  });
+}
+
+export async function mockGeminiSafetyBlock(page) {
+  await page.route(GEMINI_URL_PATTERN, (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(SAFETY_BLOCKED_HTTP_BODY),
+    });
   });
 }
 

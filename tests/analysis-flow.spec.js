@@ -104,8 +104,8 @@ test.describe('Full Analysis Flow', () => {
 
     await uploadAndWaitForResults(page);
 
-    // Model has been updated to gemini-2.0-flash which works on v1beta
-    expect(capturedUrl).toContain('gemini-2.0-flash');
+    // Model has been updated to gemini-3-flash-preview
+    expect(capturedUrl).toContain('gemini-3-flash-preview');
   });
 
   test('Gemini response wrapped in markdown fences is parsed correctly', async ({ page }) => {
