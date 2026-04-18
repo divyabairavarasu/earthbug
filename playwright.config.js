@@ -30,5 +30,10 @@ export default defineConfig({
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
+    env: {
+      // Ensures initGemini() is called on app load during tests;
+      // all actual network requests are mocked by Playwright route handlers.
+      VITE_GEMINI_API_KEY: 'test-api-key-12345',
+    },
   },
 });

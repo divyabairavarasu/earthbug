@@ -49,25 +49,13 @@ export async function mockGeminiSafetyBlock(page) {
 }
 
 /**
- * Navigate to the app and seed a valid API key directly into localStorage so
- * tests skip the key-entry screen.
+ * Navigate to the app camera view.
+ * The production-ready build no longer requires a user-supplied API key —
+ * VITE_GEMINI_API_KEY is injected at build/dev time. Tests set that env var
+ * in playwright.config.js so initGemini() is called automatically on load.
  */
-export async function loginWithApiKey(page, key = 'test-api-key-12345') {
+export async function loginWithApiKey(page) {
   await page.goto('/');
-  await page.evaluate((k) => {
-    window.localStorage.setItem('earthbug_api_key', k);
-  }, key);
-  await page.reload();
-  return key;
-}
-
-/**
- * Enter the API key through the UI form and wait for the camera view.
- */
-export async function enterApiKeyViaForm(page, key = 'test-api-key-12345') {
-  await page.goto('/');
-  await page.getByLabel(/api key/i).fill(key);
-  await page.getByRole('button', { name: /start identifying/i }).click();
   await page.waitForSelector('text=Open Camera');
 }
 
