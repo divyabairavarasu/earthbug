@@ -288,6 +288,14 @@ export function createBugChat(analysisResult, imageBase64, mimeType = 'image/jpe
       role: 'model',
       parts: [{ text: JSON.stringify(analysisResult) }],
     },
+    {
+      role: 'user',
+      parts: [{ text: 'Great, thanks! I may have follow-up questions about this bug. Please answer them in friendly, conversational plain text — no JSON.' }],
+    },
+    {
+      role: 'model',
+      parts: [{ text: `Happy to help! Ask me anything about the ${analysisResult.name}.` }],
+    },
   ];
 
   return model.startChat({ history, safetySettings: SAFETY_SETTINGS });
