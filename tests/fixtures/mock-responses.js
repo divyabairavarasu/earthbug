@@ -85,64 +85,12 @@ export const MOCK_NO_BUG_RESPONSE = {
   message: "I couldn't spot a bug in that photo. Try getting closer or make sure the bug is visible!",
 };
 
-// Raw HTTP response envelope the SDK expects
-export function buildGeminiHttpResponse(textContent) {
-  return {
-    candidates: [
-      {
-        content: {
-          parts: [{ text: textContent }],
-          role: 'model',
-        },
-        finishReason: 'STOP',
-        index: 0,
-      },
-    ],
-    promptFeedback: { safetyRatings: [] },
-  };
-}
+// Proxy API error shapes — /api/identify and /api/chat return these
+export const QUOTA_EXCEEDED_BODY   = { error: 'RESOURCE_EXHAUSTED' };
+export const SAFETY_BLOCKED_BODY   = { error: 'CONTENT_BLOCKED' };
+export const MALFORMED_BODY        = { error: 'Incomplete response from AI' };
 
-// Pre-serialised payloads
-export const SUCCESS_HTTP_BODY = buildGeminiHttpResponse(
-  JSON.stringify(MOCK_BUG_ANALYSIS),
-);
-
-export const NO_BUG_HTTP_BODY = buildGeminiHttpResponse(
-  JSON.stringify(MOCK_NO_BUG_RESPONSE),
-);
-
-export const MARKDOWN_WRAPPED_HTTP_BODY = buildGeminiHttpResponse(
-  '```json\n' + JSON.stringify(MOCK_BUG_ANALYSIS) + '\n```',
-);
-
-export const MALFORMED_JSON_HTTP_BODY = buildGeminiHttpResponse(
-  '{ this is not valid JSON at all }',
-);
-
-export const EMPTY_TEXT_HTTP_BODY = buildGeminiHttpResponse('');
-
-export const QUOTA_EXCEEDED_HTTP_BODY = {
-  error: {
-    code: 429,
-    message: 'Resource has been exhausted. Please retry in 0s.',
-    status: 'RESOURCE_EXHAUSTED',
-  },
-};
-
-// Response simulating Gemini safety filters blocking the content
-export const SAFETY_BLOCKED_HTTP_BODY = {
-  candidates: [
-    {
-      finishReason: 'SAFETY',
-      content: {},
-      safetyRatings: [
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'HIGH' },
-      ],
-      index: 0,
-    },
-  ],
-  promptFeedback: {
-    blockReason: 'SAFETY',
-    safetyRatings: [],
-  },
-};
+// buildGeminiHttpResponse is no longer used by the client-side tests
+// (the proxy returns plain JSON). Kept as a no-op export so any
+// remaining import statements don't break before they are cleaned up.
+export function buildGeminiHttpResponse(textContent) { return textContent; }

@@ -2,10 +2,8 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { mockGeminiSuccess, loginWithApiKey } from './helpers/mock-gemini.js';
+import { mockGeminiSuccess, loginWithApiKey, GEMINI_URL_PATTERN } from './helpers/mock-gemini.js';
 import {
-  SUCCESS_HTTP_BODY,
-  MARKDOWN_WRAPPED_HTTP_BODY,
   MOCK_BUG_ANALYSIS,
 } from './fixtures/mock-responses.js';
 
@@ -41,13 +39,13 @@ test.describe('Full Analysis Flow', () => {
 
   test('shows "Analyzing" loading screen while request is in flight', async ({ page }) => {
     // Delay the mock response so we can observe the loading state
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       await new Promise((r) => setTimeout(r, 1500));
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -70,14 +68,14 @@ test.describe('Full Analysis Flow', () => {
   test('Gemini request hits the generateContent endpoint with correct URL', async ({ page }) => {
     let capturedUrl = '';
     let capturedHeaders = {};
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       capturedUrl = route.request().url();
       capturedHeaders = route.request().headers();
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -92,13 +90,13 @@ test.describe('Full Analysis Flow', () => {
   // Verifies the model name embedded in the URL — was Bug #1 (now fixed)
   test('CRITICAL-BUG: request URL uses gemini-1.5-flash which is 404 on v1beta', async ({ page }) => {
     let capturedUrl = '';
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       capturedUrl = route.request().url();
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -109,12 +107,12 @@ test.describe('Full Analysis Flow', () => {
   });
 
   test('Gemini response wrapped in markdown fences is parsed correctly', async ({ page }) => {
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(MARKDOWN_WRAPPED_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       }),
     );
 
@@ -124,8 +122,8 @@ test.describe('Full Analysis Flow', () => {
 
   test('image is included in the request payload (base64 inlineData)', async ({ page }) => {
     let hasImageData = false;
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       const body = route.request().postDataJSON();
       hasImageData = body?.contents?.[0]?.parts?.some?.(
         p => p.inlineData?.data && p.inlineData.mimeType,
@@ -133,7 +131,7 @@ test.describe('Full Analysis Flow', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -143,8 +141,8 @@ test.describe('Full Analysis Flow', () => {
 
   test('system prompt is included as first content part', async ({ page }) => {
     let hasSystemPrompt = false;
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       const body = route.request().postDataJSON();
       const parts = body?.contents?.[0]?.parts ?? [];
       hasSystemPrompt = parts.some(
@@ -153,7 +151,7 @@ test.describe('Full Analysis Flow', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 

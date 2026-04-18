@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { mockGeminiSuccess, loginWithApiKey } from './helpers/mock-gemini.js';
-import { SUCCESS_HTTP_BODY, NO_BUG_HTTP_BODY } from './fixtures/mock-responses.js';
+import { mockGeminiSuccess, loginWithApiKey, GEMINI_URL_PATTERN } from './helpers/mock-gemini.js';
+import { MOCK_BUG_ANALYSIS, MOCK_NO_BUG_RESPONSE } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -76,13 +76,13 @@ test.describe('File Upload', () => {
   // by the "GIF upload" test which bypasses compression. See KNOWN-BUG below.
   test('uploading an image transitions to analyzing view', async ({ page }) => {
     // Delay the mock so the Analyzing state is rendered before the response arrives
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       await new Promise((r) => setTimeout(r, 600));
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -164,7 +164,7 @@ test.describe('File Upload', () => {
   // GIF is now compressed to JPEG before sending to the API
   test('KNOWN-BUG: GIF upload bypasses compression and sends raw base64', async ({ page }) => {
     const requests = [];
-    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    await page.route(GEMINI_URL_PATTERN, async (route) => {
       const body = route.request().postDataJSON();
       // Check the mimeType sent to the API
       const mimeType = body?.contents?.[0]?.parts?.find?.(
@@ -174,7 +174,7 @@ test.describe('File Upload', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(SUCCESS_HTTP_BODY),
+        body: JSON.stringify(MOCK_BUG_ANALYSIS),
       });
     });
 
@@ -212,22 +212,12 @@ test.describe('File Upload', () => {
   });
 
   test('Gemini "no bug found" response shows friendly error, not crash', async ({ page }) => {
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ text: JSON.stringify({ error: true, message: "Couldn't find a bug!" }) }],
-                role: 'model',
-              },
-              finishReason: 'STOP',
-            },
-          ],
-        }),
+        body: JSON.stringify(MOCK_NO_BUG_RESPONSE),
       }),
     );
 

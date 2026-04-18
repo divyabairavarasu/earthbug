@@ -5,7 +5,7 @@ import AnalyzingView from './components/AnalyzingView';
 import ResultsView from './components/ResultsView';
 import Footer from './components/Footer';
 import { useCamera } from './hooks/useCamera';
-import { initGemini, identifyBug, createBugChat } from './utils/gemini';
+import { identifyBug, createBugChat } from './utils/gemini';
 
 const VIEWS = {
   CAMERA: 'camera',
@@ -91,14 +91,6 @@ export default function App() {
   const isAnalyzingRef = useRef(false);
   const cameraHook = useCamera();
 
-  // Auto-initialize Gemini from the embedded env key — no user input needed
-  useEffect(() => {
-    const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (envKey) {
-      initGemini(envKey);
-    }
-  }, []);
-
   // Demo mode: ?demo=true loads a pre-seeded result without any API call
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -148,7 +140,7 @@ export default function App() {
         });
 
         try {
-          const chat = createBugChat(analysis, photo.base64, photo.mimeType);
+          const chat = createBugChat(analysis);
           setChatSession(chat);
         } catch {
           // Follow-up chat is a bonus feature — don't fail the whole flow

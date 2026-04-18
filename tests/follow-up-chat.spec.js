@@ -1,37 +1,44 @@
 /**
  * Follow-up chat tests — after a successful bug analysis, users can ask
  * follow-up questions via suggested chips or a free-text input.
+ *
+ * Analysis calls go to /api/identify; chat calls go to /api/chat.
  */
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { loginWithApiKey, GEMINI_URL_PATTERN } from './helpers/mock-gemini.js';
-import { MOCK_BUG_ANALYSIS, buildGeminiHttpResponse } from './fixtures/mock-responses.js';
+import { loginWithApiKey, IDENTIFY_URL, CHAT_URL } from './helpers/mock-gemini.js';
+import { MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PNG_PATH = path.join(__dirname, 'fixtures', 'test-bug.png');
 
 const FOLLOW_UP_ANSWER = 'Ladybugs are attracted by planting dill, fennel, and marigolds nearby.';
 
-async function uploadAndAnalyze(page) {
-  // First call → analysis result; subsequent calls → follow-up chat answers
-  let callCount = 0;
-  await page.route(GEMINI_URL_PATTERN, (route) => {
-    callCount++;
-    if (callCount === 1) {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify(MOCK_BUG_ANALYSIS))),
-      });
-    } else {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(buildGeminiHttpResponse(FOLLOW_UP_ANSWER)),
-      });
-    }
+async function mockAnalysis(page) {
+  await page.route(IDENTIFY_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_BUG_ANALYSIS),
+    }),
+  );
+}
+
+async function mockChat(page, answer = FOLLOW_UP_ANSWER, { delay = 0 } = {}) {
+  await page.route(CHAT_URL, async (route) => {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ answer }),
+    });
   });
+}
+
+async function uploadAndAnalyze(page) {
+  await mockAnalysis(page);
+  await mockChat(page);
 
   const [chooser] = await Promise.all([
     page.waitForEvent('filechooser'),
@@ -40,6 +47,8 @@ async function uploadAndAnalyze(page) {
   await chooser.setFiles(PNG_PATH);
   await expect(page.getByRole('heading', { name: 'Ladybug' })).toBeVisible({ timeout: 10_000 });
 }
+
+// ─── Section visibility ───────────────────────────────────────────────────────
 
 test.describe('Follow-up chat — section visibility', () => {
   test('chat section shown after successful analysis', async ({ page }) => {
@@ -74,29 +83,13 @@ test.describe('Follow-up chat — section visibility', () => {
   });
 });
 
+// ─── Asking a question ────────────────────────────────────────────────────────
+
 test.describe('Follow-up chat — asking a question', () => {
   test('clicking a suggested question shows loading state then answer', async ({ page }) => {
     await loginWithApiKey(page);
-
-    // Small delay on the follow-up so the loading indicator is reliably visible
-    let callCount = 0;
-    await page.route(GEMINI_URL_PATTERN, async (route) => {
-      callCount++;
-      if (callCount === 1) {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify(MOCK_BUG_ANALYSIS))),
-        });
-      } else {
-        await new Promise((r) => setTimeout(r, 500));
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(FOLLOW_UP_ANSWER)),
-        });
-      }
-    });
+    await mockAnalysis(page);
+    await mockChat(page, FOLLOW_UP_ANSWER, { delay: 500 });
 
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
@@ -106,7 +99,6 @@ test.describe('Follow-up chat — asking a question', () => {
     await expect(page.getByRole('heading', { name: 'Ladybug' })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole('button', { name: /What eats this bug/i }).click();
-
     await expect(page.getByText(/Consulting the entomologist/i)).toBeVisible({ timeout: 5_000 });
     await expect(page.getByText(FOLLOW_UP_ANSWER)).toBeVisible({ timeout: 10_000 });
   });
@@ -135,35 +127,16 @@ test.describe('Follow-up chat — asking a question', () => {
     await loginWithApiKey(page);
     await uploadAndAnalyze(page);
 
-    const chip = page.getByRole('button', { name: /How do I attract more/i });
-    await chip.click();
-
-    const input = page.getByPlaceholder(/Ask anything about this bug/i);
-    await expect(input).toHaveValue(/How do I attract more/i);
+    await page.getByRole('button', { name: /How do I attract more/i }).click();
+    await expect(page.getByPlaceholder(/Ask anything about this bug/i)).toHaveValue(
+      /How do I attract more/i,
+    );
   });
 
   test('inputs disabled while question is in flight', async ({ page }) => {
     await loginWithApiKey(page);
-
-    // Slow follow-up so we can assert disabled state before it resolves
-    let callCount = 0;
-    await page.route(GEMINI_URL_PATTERN, async (route) => {
-      callCount++;
-      if (callCount === 1) {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify(MOCK_BUG_ANALYSIS))),
-        });
-      } else {
-        await new Promise((r) => setTimeout(r, 3_000));
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(FOLLOW_UP_ANSWER)),
-        });
-      }
-    });
+    await mockAnalysis(page);
+    await mockChat(page, FOLLOW_UP_ANSWER, { delay: 3_000 });
 
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
@@ -175,33 +148,20 @@ test.describe('Follow-up chat — asking a question', () => {
     await page.getByPlaceholder(/Ask anything about this bug/i).fill('A question');
     await page.getByRole('button', { name: /^Ask$/i }).click();
 
-    // Loading indicator appears while in-flight
-    // Loading indicator confirms isAskingFollowUp is true
     await expect(page.getByText(/Consulting the entomologist/i)).toBeVisible({ timeout: 5_000 });
-    // Button text flips to "..." and carries disabled attribute while in-flight
+    // Button text changes to "..." while in-flight
     await expect(page.getByRole('button', { name: '...' })).toBeDisabled();
-    // Input also disabled while in-flight
     await expect(page.getByPlaceholder(/Ask anything about this bug/i)).toBeDisabled();
   });
 });
 
+// ─── Error handling ───────────────────────────────────────────────────────────
+
 test.describe('Follow-up chat — error handling', () => {
   test('network failure on follow-up shows error message', async ({ page }) => {
     await loginWithApiKey(page);
-
-    let callCount = 0;
-    await page.route(GEMINI_URL_PATTERN, (route) => {
-      callCount++;
-      if (callCount === 1) {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify(MOCK_BUG_ANALYSIS))),
-        });
-      } else {
-        route.abort('failed');
-      }
-    });
+    await mockAnalysis(page);
+    await page.route(CHAT_URL, (route) => route.abort('failed'));
 
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
@@ -211,36 +171,22 @@ test.describe('Follow-up chat — error handling', () => {
     await expect(page.getByRole('heading', { name: 'Ladybug' })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole('button', { name: /What eats this bug/i }).click();
-
     await expect(page.getByText(/Could not get an answer/i)).toBeVisible({ timeout: 10_000 });
   });
 
   test('asking a second question replaces the previous answer', async ({ page }) => {
-    await loginWithApiKey(page);
-
     const SECOND_ANSWER = 'Birds, spiders, and parasitic wasps are natural predators.';
-    let callCount = 0;
-    await page.route(GEMINI_URL_PATTERN, (route) => {
-      callCount++;
-      if (callCount === 1) {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify(MOCK_BUG_ANALYSIS))),
-        });
-      } else if (callCount === 2) {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(FOLLOW_UP_ANSWER)),
-        });
-      } else {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(buildGeminiHttpResponse(SECOND_ANSWER)),
-        });
-      }
+    await loginWithApiKey(page);
+    await mockAnalysis(page);
+
+    let chatCount = 0;
+    await page.route(CHAT_URL, (route) => {
+      chatCount++;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: chatCount === 1 ? FOLLOW_UP_ANSWER : SECOND_ANSWER }),
+      });
     });
 
     const [chooser] = await Promise.all([
@@ -250,11 +196,9 @@ test.describe('Follow-up chat — error handling', () => {
     await chooser.setFiles(PNG_PATH);
     await expect(page.getByRole('heading', { name: 'Ladybug' })).toBeVisible({ timeout: 10_000 });
 
-    // First follow-up
     await page.getByRole('button', { name: /What eats this bug/i }).click();
     await expect(page.getByText(FOLLOW_UP_ANSWER)).toBeVisible({ timeout: 10_000 });
 
-    // Second follow-up replaces the first answer
     await page.getByRole('button', { name: /How do I attract more/i }).click();
     await expect(page.getByText(SECOND_ANSWER)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(FOLLOW_UP_ANSWER)).not.toBeVisible();

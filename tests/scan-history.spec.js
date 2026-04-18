@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { mockGeminiSuccess, loginWithApiKey } from './helpers/mock-gemini.js';
-import { SUCCESS_HTTP_BODY, MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
+import { mockGeminiSuccess, loginWithApiKey, GEMINI_URL_PATTERN } from './helpers/mock-gemini.js';
+import { MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JPEG_PATH = path.join(__dirname, 'fixtures', 'test-bug.jpg');
@@ -23,12 +23,12 @@ async function runOneScan(page) {
   // Reset client-side throttle so successive scans within the same test aren't blocked
   await page.evaluate(() => window.__earthbugResetRateLimit?.());
 
-  await page.unroute('https://generativelanguage.googleapis.com/**');
-  await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+  await page.unroute(GEMINI_URL_PATTERN);
+  await page.route(GEMINI_URL_PATTERN, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(SUCCESS_HTTP_BODY),
+      body: JSON.stringify(MOCK_BUG_ANALYSIS),
     }),
   );
 
@@ -85,17 +85,12 @@ test.describe('Scan History', () => {
       const bugName = `TestBug${i}`;
       // Reset throttle so successive uploads in this loop aren't blocked
       await page.evaluate(() => window.__earthbugResetRateLimit?.());
-      await page.unroute('https://generativelanguage.googleapis.com/**');
-      await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+      await page.unroute(GEMINI_URL_PATTERN);
+      await page.route(GEMINI_URL_PATTERN, (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            candidates: [{
-              content: { parts: [{ text: JSON.stringify({ ...MOCK_BUG_ANALYSIS, name: bugName }) }], role: 'model' },
-              finishReason: 'STOP',
-            }],
-          }),
+          body: JSON.stringify({ ...MOCK_BUG_ANALYSIS, name: bugName }),
         }),
       );
       const [chooser] = await Promise.all([
@@ -140,22 +135,12 @@ test.describe('Scan History', () => {
   // which is correct — but re-viewing a history item that previously errored
   // is impossible since they're never stored. This test confirms the guard works.
   test('"no bug found" result is not added to scan history', async ({ page }) => {
-    await page.unroute('https://generativelanguage.googleapis.com/**');
-    await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+    await page.unroute(GEMINI_URL_PATTERN);
+    await page.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [{ text: JSON.stringify({ error: true, message: "No bug found!" }) }],
-                role: 'model',
-              },
-              finishReason: 'STOP',
-            },
-          ],
-        }),
+        body: JSON.stringify({ error: true, message: "No bug found!" }),
       }),
     );
 

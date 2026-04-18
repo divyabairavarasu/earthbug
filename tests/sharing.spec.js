@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { mockGeminiSuccess, loginWithApiKey } from './helpers/mock-gemini.js';
-import { SUCCESS_HTTP_BODY, MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
+import { MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JPEG_PATH = path.join(__dirname, 'fixtures', 'test-bug.jpg');

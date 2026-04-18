@@ -49,15 +49,16 @@ ok "Build succeeded → dist/"
 # ── 5. Environment variable check ────────────────────────────────────────────
 step "Environment variable setup"
 
-if vercel env ls production 2>/dev/null | grep -q "VITE_GEMINI_API_KEY"; then
-  ok "VITE_GEMINI_API_KEY already set in Vercel (production)"
+if vercel env ls production 2>/dev/null | grep -q "GEMINI_API_KEY"; then
+  ok "GEMINI_API_KEY already set in Vercel (production)"
 else
-  warn "VITE_GEMINI_API_KEY not found in Vercel production env."
+  warn "GEMINI_API_KEY not found in Vercel production env."
   echo ""
   echo "  Set it now with:"
-  echo "    vercel env add VITE_GEMINI_API_KEY production"
+  echo "    vercel env add GEMINI_API_KEY production"
   echo ""
   echo "  Then paste your key from .env when prompted."
+  echo "  Note: use GEMINI_API_KEY (no VITE_ prefix) — the key is server-side only."
   echo ""
   read -rp "  Press Enter once you've set it (or skip if already done)..."
 fi
