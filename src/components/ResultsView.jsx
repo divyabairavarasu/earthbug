@@ -1,6 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { askFollowUp } from '../utils/gemini';
 
+// Renders **bold** markers and double-newline paragraph breaks as React elements.
+// Safe alternative to dangerouslySetInnerHTML.
+function MarkdownText({ text }) {
+  const paragraphs = text.split(/\n\n+/);
+  return (
+    <div className="space-y-2">
+      {paragraphs.map((para, pi) => {
+        const parts = para.split(/\*\*(.+?)\*\*/g);
+        return (
+          <p key={pi} className="text-earth-700 text-sm leading-relaxed">
+            {parts.map((part, i) =>
+              i % 2 === 1 ? <strong key={i} className="font-semibold text-earth-900">{part}</strong> : part
+            )}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 const SHARE_TOAST_TIMEOUT_MS = 2000;
 
 function buildShareText(result) {
@@ -348,7 +368,7 @@ export default function ResultsView({ result, imageUrl, onScanAnother, chatSessi
 
           {followUpAnswer && (
             <div className="mt-4 p-4 bg-leaf-50 rounded-xl border border-leaf-200">
-              <p className="text-earth-700 text-sm leading-relaxed whitespace-pre-wrap">{followUpAnswer}</p>
+              <MarkdownText text={followUpAnswer} />
             </div>
           )}
 

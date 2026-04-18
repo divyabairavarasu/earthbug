@@ -290,11 +290,11 @@ export function createBugChat(analysisResult, imageBase64, mimeType = 'image/jpe
     },
     {
       role: 'user',
-      parts: [{ text: 'Great, thanks! I may have follow-up questions about this bug. Please answer them in friendly, conversational plain text — no JSON.' }],
+      parts: [{ text: `Perfect. I have follow-up questions about this bug. Answer as a passionate, warm soil ecologist speaking directly to a curious gardener — not as an AI assistant. Use plain conversational language, genuine enthusiasm for the natural world, and occasional dry wit. Format key terms and surprising facts in **bold**. Use double newlines to separate thoughts into short paragraphs. No bullet lists, no JSON, no "As an AI" disclaimers.` }],
     },
     {
       role: 'model',
-      parts: [{ text: `Happy to help! Ask me anything about the ${analysisResult.name}.` }],
+      parts: [{ text: `Got it — I'll talk soil and bugs the way I would over a garden fence. What would you like to know about the ${analysisResult.name}?` }],
     },
   ];
 
