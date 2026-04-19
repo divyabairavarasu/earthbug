@@ -20,6 +20,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Vercel
+.vercel/
+
 # Logs
 *.log
 npm-debug.log*
