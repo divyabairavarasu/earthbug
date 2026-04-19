@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { mockGeminiSuccess, loginWithApiKey } from './helpers/mock-gemini.js';
-import { MOCK_BUG_ANALYSIS, SUCCESS_HTTP_BODY } from './fixtures/mock-responses.js';
+import { mockGeminiSuccess, loginWithApiKey, GEMINI_URL_PATTERN } from './helpers/mock-gemini.js';
+import { MOCK_BUG_ANALYSIS } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PNG_PATH = path.join(__dirname, 'fixtures', 'test-bug.png');
@@ -19,9 +19,9 @@ function ensureTestPng() {
   return PNG_PATH;
 }
 
-async function goToResults(page, responseBody = SUCCESS_HTTP_BODY) {
-  await page.unroute('https://generativelanguage.googleapis.com/**');
-  await page.route('https://generativelanguage.googleapis.com/**', (route) =>
+async function goToResults(page, responseBody = MOCK_BUG_ANALYSIS) {
+  await page.unroute(GEMINI_URL_PATTERN);
+  await page.route(GEMINI_URL_PATTERN, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -107,27 +107,9 @@ test.describe('Results View', () => {
     const p = await ctx.newPage();
     await loginWithApiKey(p);
 
-    const bullyBody = {
-      ...SUCCESS_HTTP_BODY,
-      candidates: [
-        {
-          content: {
-            parts: [
-              {
-                text: JSON.stringify({
-                  ...MOCK_BUG_ANALYSIS,
-                  verdict: 'Garden Bully',
-                }),
-              },
-            ],
-            role: 'model',
-          },
-          finishReason: 'STOP',
-        },
-      ],
-    };
+    const bullyBody = { ...MOCK_BUG_ANALYSIS, verdict: 'Garden Bully' };
 
-    await p.route('https://generativelanguage.googleapis.com/**', (route) =>
+    await p.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -151,19 +133,9 @@ test.describe('Results View', () => {
     const p = await ctx.newPage();
     await loginWithApiKey(p);
 
-    const body = {
-      candidates: [
-        {
-          content: {
-            parts: [{ text: JSON.stringify({ ...MOCK_BUG_ANALYSIS, verdict: 'UnknownVerdict' }) }],
-            role: 'model',
-          },
-          finishReason: 'STOP',
-        },
-      ],
-    };
+    const body = { ...MOCK_BUG_ANALYSIS, verdict: 'UnknownVerdict' };
 
-    await p.route('https://generativelanguage.googleapis.com/**', (route) =>
+    await p.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }),
     );
 
@@ -184,18 +156,8 @@ test.describe('Results View', () => {
     const p = await ctx.newPage();
     await loginWithApiKey(p);
 
-    const body = {
-      candidates: [
-        {
-          content: {
-            parts: [{ text: JSON.stringify({ ...MOCK_BUG_ANALYSIS, benefits: [] }) }],
-            role: 'model',
-          },
-          finishReason: 'STOP',
-        },
-      ],
-    };
-    await p.route('https://generativelanguage.googleapis.com/**', (route) =>
+    const body = { ...MOCK_BUG_ANALYSIS, benefits: [] };
+    await p.route(GEMINI_URL_PATTERN, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }),
     );
 
@@ -228,13 +190,8 @@ test.describe('Results View', () => {
     const partialResult = { ...MOCK_BUG_ANALYSIS };
     delete partialResult.name;
 
-    const body = {
-      candidates: [
-        { content: { parts: [{ text: JSON.stringify(partialResult) }], role: 'model' }, finishReason: 'STOP' },
-      ],
-    };
-    await p.route('https://generativelanguage.googleapis.com/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }),
+    await p.route(GEMINI_URL_PATTERN, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(partialResult) }),
     );
 
     const [chooser] = await Promise.all([

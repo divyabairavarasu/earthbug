@@ -8,7 +8,7 @@ import {
   loginWithApiKey,
   GEMINI_URL_PATTERN,
 } from './helpers/mock-gemini.js';
-import { NO_BUG_HTTP_BODY, buildGeminiHttpResponse } from './fixtures/mock-responses.js';
+import { MOCK_NO_BUG_RESPONSE } from './fixtures/mock-responses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JPEG_PATH = path.join(__dirname, 'fixtures', 'test-bug.jpg');
@@ -116,7 +116,7 @@ test.describe('Security — Content safety (obscene/inappropriate images)', () =
 
     // Now do a safety-blocked scan — reset throttle first
     await page.evaluate(() => window.__earthbugResetRateLimit?.());
-    await page.unroute('https://generativelanguage.googleapis.com/**');
+    await page.unroute(GEMINI_URL_PATTERN);
     await mockGeminiSafetyBlock(page);
     await uploadFile(page, ensureTestJpeg());
     await expect(page.getByText(/safety guidelines/i)).toBeVisible({ timeout: 15_000 });
@@ -136,7 +136,7 @@ test.describe('Security — Non-bug / unrecognised image handling', () => {
   });
 
   test('non-bug image response shows an error message in results', async ({ page }) => {
-    await mockGeminiSuccess(page, NO_BUG_HTTP_BODY);
+    await mockGeminiSuccess(page, MOCK_NO_BUG_RESPONSE);
     await uploadFile(page, ensureTestJpeg());
 
     // The results view renders the error message from the API
@@ -144,7 +144,7 @@ test.describe('Security — Non-bug / unrecognised image handling', () => {
   });
 
   test('non-bug result is NOT added to scan history', async ({ page }) => {
-    await mockGeminiSuccess(page, NO_BUG_HTTP_BODY);
+    await mockGeminiSuccess(page, MOCK_NO_BUG_RESPONSE);
     await uploadFile(page, ensureTestJpeg());
 
     await expect(page.getByText(/couldn't spot a bug/i)).toBeVisible({ timeout: 15_000 });
@@ -169,7 +169,7 @@ test.describe('Security — Gemini response validation', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(buildGeminiHttpResponse(JSON.stringify({ summary: 'oops' }))),
+        body: JSON.stringify({ summary: 'oops' }),
       }),
     );
     await uploadFile(page, ensureTestJpeg());
@@ -184,7 +184,7 @@ test.describe('Security — Gemini response validation', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(buildGeminiHttpResponse(poisoned)),
+        body: poisoned,
       }),
     );
     await uploadFile(page, ensureTestJpeg());
@@ -197,7 +197,7 @@ test.describe('Security — Gemini response validation', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(buildGeminiHttpResponse('this is not json {')),
+        body: 'this is not json {',
       }),
     );
     await uploadFile(page, ensureTestJpeg());
