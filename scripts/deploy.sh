@@ -65,7 +65,7 @@ fi
 
 # ── 6. Deploy ─────────────────────────────────────────────────────────────────
 step "Deploying to Vercel (production)"
-vercel --prod
+vercel --prod --force --logs
 
 echo ""
 ok "Deployed! Your live URLs:"
